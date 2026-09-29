@@ -40,6 +40,8 @@ namespace JuiceKing
             public int channel; // 0 = position, 1 = scale, 2 = rotation, 3 = other
             public bool requiresTarget = true;
             public bool dead;
+            /// <summary>Scene that queued the tween: target-less delays die with their scene.</summary>
+            public int scene;
             // Returns true when finished.
             public abstract bool Step(float t);
 
@@ -193,6 +195,7 @@ namespace JuiceKing
                     var go = new GameObject("[Tweener]");
                     DontDestroyOnLoad(go);
                     _instance = go.AddComponent<Tweener>();
+
                 }
                 return _instance;
             }
@@ -201,6 +204,7 @@ namespace JuiceKing
         void Update()
         {
             float dt = Time.deltaTime;
+            int activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
             if (_adding.Count > 0)
             {
                 _tweens.AddRange(_adding);
@@ -210,7 +214,7 @@ namespace JuiceKing
             for (int i = _tweens.Count - 1; i >= 0; i--)
             {
                 var tw = _tweens[i];
-                if (tw.dead || (tw.requiresTarget && tw.target == null))
+                if (tw.dead || (tw.requiresTarget && tw.target == null) || (!tw.requiresTarget && tw.scene != activeScene))
                 {
                     _tweens.RemoveAt(i);
                     tw.Release();
@@ -235,7 +239,11 @@ namespace JuiceKing
                     _tweens.RemoveAt(i);
                     var cb = tw.onComplete;
                     tw.Release();
-                    cb?.Invoke();
+                    if (cb != null)
+                    {
+                        try { cb(); }
+                        catch (Exception e) { Debug.LogException(e); }
+                    }
                 }
             }
         }
@@ -243,6 +251,7 @@ namespace JuiceKing
         static void Add(TweenBase tw, bool killSameChannel)
         {
             var inst = Instance;
+            tw.scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
             if (killSameChannel && tw.target != null) Kill(tw.target, tw.channel);
             inst._adding.Add(tw);
         }

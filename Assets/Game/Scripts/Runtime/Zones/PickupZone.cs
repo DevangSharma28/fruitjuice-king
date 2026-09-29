@@ -19,10 +19,11 @@ namespace JuiceKing
 
         protected override float TickCarrier(Carrier c, float timer)
         {
-            if (Source == null || timer < entryDelay + interval) return timer;
-            while (timer >= entryDelay + interval)
+            float iv = c.isPlayer ? interval / Economy.TransferSpeed : interval;
+            if (Source == null || timer < entryDelay + iv) return timer;
+            while (timer >= entryDelay + iv)
             {
-                timer -= interval;
+                timer -= iv;
                 if (Source.Available <= 0) break;
                 var type = Source.OutputType;
                 if (c.pickupFilter != null && !c.pickupFilter(type)) break;

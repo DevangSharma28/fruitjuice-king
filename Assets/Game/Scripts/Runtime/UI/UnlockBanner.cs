@@ -11,6 +11,7 @@ namespace JuiceKing
 
         public RectTransform banner;
         public TextMeshProUGUI titleText;
+        public TextMeshProUGUI subtitleText;
         public Image icon;
         public RectTransform shine;
         public float hold = 1.8f;
@@ -27,10 +28,19 @@ namespace JuiceKing
             banner.gameObject.SetActive(false);
         }
 
-        public void Show(string title, Sprite sprite)
+        public void Show(string title, Sprite sprite, string subtitle = null)
         {
             int serial = ++_serial;
             titleText.text = title;
+            if (subtitleText != null)
+            {
+                bool has = !string.IsNullOrEmpty(subtitle);
+                subtitleText.text = subtitle ?? "";
+                // The text sits on its own note background (its parent, unless it is placed straight on the banner).
+                var holder = subtitleText.transform.parent != banner ? subtitleText.transform.parent.gameObject : subtitleText.gameObject;
+                holder.SetActive(has);
+                if (has) Tweener.Scale(holder.transform, new Vector3(0.6f, 0.6f, 1f), Vector3.one, 0.35f, Ease.OutBack, null, 0.25f);
+            }
             if (icon != null)
             {
                 icon.sprite = sprite;
@@ -46,7 +56,7 @@ namespace JuiceKing
                 float w = banner.rect.width;
                 Tweener.Value(shine, 0.7f, t => shine.anchoredPosition = new Vector2(Mathf.Lerp(-w * 0.6f, w * 0.6f, t), 0f), null, 0.35f);
             }
-            Tweener.Delay(hold, () =>
+            Tweener.Delay(hold + (string.IsNullOrEmpty(subtitle) ? 0f : 0.8f), () =>
             {
                 if (serial != _serial) return;
                 Vector2 f2 = banner.anchoredPosition;

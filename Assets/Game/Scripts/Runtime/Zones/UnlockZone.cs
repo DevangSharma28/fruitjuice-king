@@ -29,15 +29,27 @@ namespace JuiceKing
         public SpriteRenderer icon;
         public Transform label;
 
+        [Header("Glow pad (Tropical style)")]
+        [Tooltip("Radial progress ring (world-space UI image, Filled / Radial360).")]
+        public UnityEngine.UI.Image radialFill;
+        [Tooltip("Soft glowing ring that breathes while the pad waits.")]
+        public SpriteRenderer glow;
+        [Tooltip("Discovery line shown under the NEW! banner.")]
+        public string subtitle;
+        [Tooltip("Glide the camera to the revealed area after unlocking.")]
+        public bool peekOnUnlock;
+
         public int Paid { get; private set; }
         public int Remaining => Mathf.Max(0, price - Paid);
         public bool IsUnlocked { get; private set; }
 
         float _acc;
+        float _glowA = -1f;
         float _coinTimer;
         float _stuckTime;
         Vector3 _baseScale;
         Vector3 _labelBase;
+        float _glowScale = 1f;
 
         /// <summary>Seconds the player has been standing here unable to pay (drives the ad offer).</summary>
         public float StuckTime => _stuckTime;
@@ -48,6 +60,7 @@ namespace JuiceKing
             playerOnly = true;
             _baseScale = transform.localScale;
             if (label != null) _labelBase = label.localPosition;
+            if (glow != null) _glowScale = glow.transform.localScale.x;
         }
 
         /// <summary>Called by <see cref="UnlockManager"/> on load.</summary>
@@ -78,6 +91,17 @@ namespace JuiceKing
         protected override void Update()
         {
             base.Update();
+            if (glow != null)
+            {
+                if (_glowA < 0f) _glowA = glow.color.a;
+                bool afford = GameManager.I != null && GameManager.I.Money >= Remaining && Remaining > 0;
+                float k = 0.65f + Mathf.Sin(Time.time * (afford ? 4.5f : 2f)) * 0.35f;
+                var c = glow.color;
+                c.a = _glowA * (afford ? Mathf.Lerp(0.8f, 1.2f, k) : Mathf.Lerp(0.45f, 0.8f, k));
+                glow.color = c;
+                float s = 1f + k * (afford ? 0.06f : 0.03f);
+                glow.transform.localScale = new Vector3(s, s, 1f) * _glowScale;
+            }
             // Bob the price label; bob faster when the player can afford it.
             if (label != null)
             {
@@ -174,6 +198,7 @@ namespace JuiceKing
             if (priceText != null) priceText.text = "$" + Format(remaining);
             if (groundPriceText != null) groundPriceText.text = Format(remaining);
             if (titleText != null) titleText.text = title;
+            if (radialFill != null) radialFill.fillAmount = price <= 0 ? 1f : Mathf.Clamp01(Paid / (float)price);
             if (fill != null)
             {
                 float f = price <= 0 ? 1f : Mathf.Clamp01(Paid / (float)price);
@@ -186,6 +211,7 @@ namespace JuiceKing
 
         public static string Format(long v)
         {
+            if (v >= 1000000000) return (v / 1000000000f).ToString("0.#") + "B";
             if (v >= 1000000) return (v / 1000000f).ToString("0.#") + "M";
             if (v >= 10000) return (v / 1000f).ToString("0.#") + "K";
             return v.ToString();
@@ -224,7 +250,15 @@ namespace JuiceKing
                 delay += 0.08f;
             }
 
-            if (UnlockBanner.I != null) UnlockBanner.I.Show(title, icon != null ? icon.sprite : null);
+            if (UnlockBanner.I != null) UnlockBanner.I.Show(title, icon != null ? icon.sprite : null, subtitle);
+
+            // Reveal: glide over to what just appeared if it is not already in view.
+            if (peekOnUnlock && GameRefs.I != null && GameRefs.I.player != null)
+            {
+                Vector3 d = fx - GameRefs.I.player.transform.position;
+                d.y = 0f;
+                if (d.magnitude > 5f) Tweener.Delay(0.35f, () => CameraFollow.Peek(fx, 1.1f, 1.1f));
+            }
 
             UnlockManager.OnZoneUnlocked(this);
             Tweener.Scale(transform, _baseScale, Vector3.zero, 0.25f, Ease.InQuad, () =>

@@ -83,6 +83,7 @@ namespace JuiceKing
         void Update()
         {
             float dt = Time.deltaTime;
+            outputPile.layers = Economy.TrayLayers;
             int need = Balance.SlicesPerJuice[(int)kind];
             var col = Balance.JuiceColors[(int)kind];
 
@@ -110,7 +111,7 @@ namespace JuiceKing
             if (_working)
             {
                 _t += dt * Boosts.WorkMult;
-                float dur = Balance.JuiceTime[(int)kind];
+                float dur = Economy.JuiceTime(kind);
                 float k = Mathf.Clamp01(_t / dur);
                 SetFill(0.15f + 0.85f * k);
                 if (body != null)
@@ -137,19 +138,19 @@ namespace JuiceKing
                         Tweener.Punch(body, 0.1f, 0.28f, _bodyScale);
                     }
                     SetFill(0.15f);
-                    var juice = GameRefs.I.SpawnItem(ItemTypes.Juice(kind), spoutPoint.position, spoutPoint.rotation);
-                    juice.transform.localScale = Vector3.one * 0.4f;
-                    outputPile.Add(juice, 0.9f, 0.35f, () =>
+                    SpawnCup(col);
+                    // Bonus Cup upgrade: sometimes the blend fills two cups.
+                    if (Economy.BonusCupChance > 0f && Random.value < Economy.BonusCupChance && outputPile.HasSpace)
                     {
-                        Fx.Glint(juice.transform.position + Vector3.up * 0.35f, Color.white, 2);
-                        if (NearPlayer()) Sfx.Play(SfxId.Tink, 0.18f, Random.Range(0.95f, 1.1f));
-                    });
-                    Tweener.Scale(juice.transform, Vector3.one * 0.4f, Vector3.one, 0.35f, Ease.OutBack);
+                        SpawnCup(col);
+                        FloatingText.Show("x2", spoutPoint.position + Vector3.up * 0.8f, new Color(1f, 0.9f, 0.3f), 0.8f, 0.8f, 0.7f);
+                    }
                     Fx.Sparkle(spoutPoint.position, col, 5);
                     Fx.Drops(spoutPoint.position, col, 5);
                     if (NearPlayer()) Sfx.Play(SfxId.Pour, 0.35f);
                 }
             }
+
 
             if (hum != null) hum.volume = Mathf.MoveTowards(hum.volume, _working && NearPlayer() ? 0.1f : 0f, dt);
 
@@ -161,6 +162,19 @@ namespace JuiceKing
             }
             if (sign != null)
                 sign.localPosition = _signPos + Vector3.up * (Mathf.Sin(Time.time * (_working ? 9f : 2f)) * (_working ? 0.035f : 0.02f));
+        }
+
+        void SpawnCup(Color col)
+        {
+            var juice = GameRefs.I.SpawnItem(ItemTypes.Juice(kind), spoutPoint.position, spoutPoint.rotation);
+            juice.transform.localScale = Vector3.one * 0.4f;
+            outputPile.Add(juice, 0.9f, 0.35f, () =>
+            {
+                Fx.Glint(juice.transform.position + Vector3.up * 0.35f, Color.white, 2);
+                if (NearPlayer()) Sfx.Play(SfxId.Tink, 0.18f, Random.Range(0.95f, 1.1f));
+            });
+            Tweener.Scale(juice.transform, Vector3.one * 0.4f, Vector3.one, 0.35f, Ease.OutBack);
+            if (GameManager.I != null) GameManager.I.NotifyJuiceMade();
         }
 
         bool NearPlayer()

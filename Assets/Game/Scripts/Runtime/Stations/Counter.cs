@@ -34,7 +34,7 @@ namespace JuiceKing
 
         void OnUpgrade()
         {
-            int lvl = GameManager.I.GetLevel(UpgradeKind.Counter);
+            int lvl = Economy.CounterLayers;
             if (lvl == _level) return;
             bool grew = _level >= 0;
             SyncLayers();
@@ -47,8 +47,8 @@ namespace JuiceKing
 
         void SyncLayers()
         {
-            _level = GameManager.I.GetLevel(UpgradeKind.Counter);
-            display.layers = Balance.CounterLayers(_level);
+            _level = Economy.CounterLayers;
+            display.layers = _level;
         }
 
         void Update()

@@ -7,10 +7,11 @@ namespace JuiceKing
     /// Hired helper. Farmers harvest one field and feed its juicer.
     /// Waiters serve the queue in order: they fetch exactly the flavour the next unserved customer needs, and if that
     /// juicer has nothing ready they wait beside it and raise a warning instead of grabbing other juice.
+    /// Loaders (Tropical Farm) do the same for the truck parked at the delivery bay.
     /// </summary>
     public class WorkerAI : MonoBehaviour
     {
-        public enum Role { Farmer, Waiter }
+        public enum Role { Farmer, Waiter, Loader }
         enum Task { Idle, Gather, Deliver, Collect, Waiting }
 
         public Role role;
@@ -30,6 +31,9 @@ namespace JuiceKing
         public GameObject warnBubble;
         public SpriteRenderer warnFruit;
 
+        [Header("Loader")]
+        public DeliveryZone deliveryZone;
+
         public Transform idlePoint;
 
         Task _task;
@@ -37,6 +41,8 @@ namespace JuiceKing
         Vector3 _dest;
         bool _hasDest;
         float _baseSpeed = -1f;
+        int _baseCapacity = -1;
+        float _baseDps;
         float _waitT;
         bool _warnShown;
         FruitKind _warnKind;
@@ -54,11 +60,16 @@ namespace JuiceKing
 
         void OnEnable()
         {
-            if (_baseSpeed < 0f) _baseSpeed = agent.speed;
+            if (_baseSpeed < 0f)
+            {
+                _baseSpeed = agent.speed;
+                _baseDps = saw != null ? saw.dps : 0f;
+            }
             _task = Task.Idle;
             _think = 0.3f;
             // Farmers only ever carry slices; they must not grab cups while crossing a juicer's tray pad.
             if (role == Role.Farmer) carrier.pickupFilter = t => t.IsSlice();
+            else if (role == Role.Loader) carrier.pickupFilter = t => t.IsJuice();
         }
 
         void Update()
@@ -70,13 +81,17 @@ namespace JuiceKing
                 return;
             }
 
-            agent.speed = _baseSpeed * Mathf.Lerp(1f, Boosts.WorkMult, 0.6f);
+            agent.speed = _baseSpeed * Mathf.Lerp(1f, Boosts.WorkMult, 0.6f) * Economy.WorkerSpeedMult;
+            if (_baseCapacity < 0) _baseCapacity = carrier.capacity;
+            carrier.capacity = _baseCapacity + Economy.WorkerCarryBonus;
+            if (saw != null) saw.dps = _baseDps * Economy.WorkerSpeedMult;
 
             _think -= dt;
             if (_think <= 0f)
             {
                 _think = 0.25f;
                 if (role == Role.Farmer) DecideFarmer();
+                else if (role == Role.Loader) DecideLoader(0.25f);
                 else DecideWaiter(0.25f);
                 if (_hasDest) agent.SetDestination(_dest);
             }
@@ -236,6 +251,71 @@ namespace JuiceKing
             }
         }
 
+        // ---------------------------------------------------------------- loader
+
+        void DecideLoader(float dt)
+        {
+            var dm = DeliveryManager.I;
+            bool loading = dm != null && dm.Loading && deliveryZone != null;
+            var kind = loading ? dm.Order.kind : FruitKind.Coconut;
+            var wanted = ItemTypes.Juice(kind);
+            int carryingWanted = carrier.CountOf(t => t == wanted);
+            int need = loading ? dm.Order.Remaining - dm.InFlight - carryingWanted : 0;
+
+            // Leftovers from a finished order go to the shop counter.
+            if (carrier.Count > carryingWanted || (!loading && carrier.Count > 0))
+            {
+                _task = Task.Deliver;
+                carrier.maxPickup = 0;
+                SetWarn(false, kind);
+                if (counter != null) SetDest(counter.dropZone.transform.position);
+                return;
+            }
+            if (!loading)
+            {
+                _task = Task.Idle;
+                carrier.maxPickup = 0;
+                SetWarn(false, kind);
+                if (idlePoint != null) SetDest(idlePoint.position);
+                return;
+            }
+
+            var j = JuicerFor(kind);
+            bool deliver = carryingWanted > 0 && (carrier.IsFull || need <= 0 || _task == Task.Deliver || (j != null && j.Available == 0 && Near(j.outputZone.transform.position)));
+            if (deliver)
+            {
+                _task = Task.Deliver;
+                carrier.maxPickup = 0;
+                SetWarn(false, kind);
+                SetDest(deliveryZone.transform.position);
+                return;
+            }
+            if (j == null || need <= 0)
+            {
+                _task = Task.Idle;
+                carrier.maxPickup = 0;
+                if (idlePoint != null) SetDest(idlePoint.position);
+                return;
+            }
+
+            carrier.pickupFilter = t => t == wanted;
+            carrier.maxPickup = Mathf.Min(carrier.capacity, carryingWanted + need);
+            var pad = j.outputZone.transform.position;
+            SetDest(pad);
+            if (Near(pad) && j.Available == 0)
+            {
+                _task = Task.Waiting;
+                _waitT += dt;
+                if (_waitT > 0.8f) SetWarn(true, kind);
+            }
+            else
+            {
+                _task = Task.Collect;
+                _waitT = 0f;
+                SetWarn(false, kind);
+            }
+        }
+
         void SetWarn(bool on, FruitKind kind)
         {
             if (!on) _waitT = 0f;
@@ -253,7 +333,7 @@ namespace JuiceKing
                     _nextToast = Time.time + 12f;
                     Sfx.Play(SfxId.Error, 0.25f, 1.25f);
                     if (HUD.I != null)
-                        HUD.I.Toast("Waiter needs " + Balance.FruitNames[(int)kind] + " juice!", GameRefs.I.fruitIcons[(int)kind]);
+                        HUD.I.Toast((role == Role.Loader ? "Loader" : "Waiter") + " needs " + Balance.FruitNames[(int)kind] + " juice!", GameRefs.I.fruitIcons[(int)kind]);
                 }
             }
             else warnBubble.SetActive(false);

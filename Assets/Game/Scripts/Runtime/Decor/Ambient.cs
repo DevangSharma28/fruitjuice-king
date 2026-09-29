@@ -41,6 +41,7 @@ namespace JuiceKing
         public Vector2 waterScroll = new Vector2(0.03f, 0.02f);
 
         readonly List<Material> _waterMats = new List<Material>();
+        readonly List<int> _waterProps = new List<int>();
 
         void Awake()
         {
@@ -53,7 +54,14 @@ namespace JuiceKing
             }
             if (water != null)
                 foreach (var r in water)
-                    if (r != null) _waterMats.Add(r.material);
+                {
+                    if (r == null) continue;
+                    var m = r.material;
+                    // URP Lit uses _BaseMap; sprite / legacy shaders use _MainTex.
+                    int prop = m.HasProperty("_BaseMap") ? Shader.PropertyToID("_BaseMap") : Shader.PropertyToID("_MainTex");
+                    _waterMats.Add(m);
+                    _waterProps.Add(prop);
+                }
         }
 
         void Update()
@@ -93,8 +101,8 @@ namespace JuiceKing
                 }
             }
 
-            foreach (var m in _waterMats)
-                m.SetTextureOffset("_BaseMap", waterScroll * time);
+            for (int i = 0; i < _waterMats.Count; i++)
+                _waterMats[i].SetTextureOffset(_waterProps[i], waterScroll * time);
         }
     }
 }

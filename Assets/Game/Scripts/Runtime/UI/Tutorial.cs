@@ -3,8 +3,9 @@ using UnityEngine;
 namespace JuiceKing
 {
     /// <summary>
-    /// Guides a new player through the core loop with an objective banner, a bouncing arrow
-    /// over the target and a ground pointer next to the player. Afterwards it hints affordable unlocks.
+    /// Guides a new player through the core loop with an objective banner, a bouncing arrow over the target and a
+    /// ground pointer next to the player. Afterwards it keeps naming the next goal: the next unlock (and the money still
+    /// needed), upgrades that are ready, and finally "max every upgrade" until the world is complete.
     /// </summary>
     public class Tutorial : MonoBehaviour
     {
@@ -17,12 +18,19 @@ namespace JuiceKing
         public Juicer firstJuicer;
         public Counter counter;
         public CashPile cash;
+        [Tooltip("Upgrade shop pad (pointed at when an upgrade is affordable).")]
+        public UpgradeZone upgradeZone;
 
         Carrier _player;
         Vector3 _arrowBase;
         Vector3 _pointerScale = Vector3.one;
         float _ringT;
         Vector3? _lastTarget;
+        int _lastStep = -1;
+        long _stepMoney;
+
+        static readonly string[] Plural = { "oranges", "watermelons", "pineapples", "coconuts", "mangoes", "bananas", "papayas" };
+        string MachineWord => Economy.World == 0 ? "juicer" : "mixer";
 
         void Start()
         {
@@ -43,20 +51,34 @@ namespace JuiceKing
         void Update()
         {
             var gm = GameManager.I;
+            if (ExpansionIntro.Playing)
+            {
+                if (HUD.I != null) HUD.I.SetObjective(null);
+                UpdateMarkers(null);
+                return;
+            }
             int step = gm.TutorialStep;
+            if (step != _lastStep)
+            {
+                _lastStep = step;
+                _stepMoney = gm.Money;
+            }
             Vector3? target = null;
             string text = null;
+            string key = null;
+            string fruits = Plural[(int)firstField.kind];
 
             switch (step)
             {
                 case 0:
-                    text = "Cut the oranges with your chainsaw!";
+                    text = "Cut the " + fruits + " with your chainsaw!";
                     var f = firstField.NearestReady(_player.transform.position);
-                    target = f != null ? f.transform.position + Vector3.up * 1.2f : firstField.Center;
+                    // Aim at the fruit itself (tropical fruit hangs high in the tree).
+                    target = f != null ? f.visual.position : firstField.Center;
                     if (_player.CountOf(t => t.IsSlice()) >= 4 || _player.IsFull) Advance();
                     break;
                 case 1:
-                    text = "Drop the oranges into the juicer";
+                    text = "Drop the " + fruits + " into the " + MachineWord;
                     target = firstJuicer.inputZone.transform.position;
                     if (firstJuicer.inputPile.Count > 0 || firstJuicer.outputPile.Count > 0 || _player.Count == 0) Advance();
                     break;
@@ -73,7 +95,8 @@ namespace JuiceKing
                 case 4:
                     text = "Customers pay here - collect the cash!";
                     target = cash.zone.transform.position;
-                    if (gm.Money > 0) Advance();
+                    // Money you already had (a new world starts with some) does not count: collect a payment first.
+                    if (gm.Money > _stepMoney) Advance();
                     break;
                 case 5:
                     text = "Spend cash to unlock new stuff!";
@@ -81,10 +104,27 @@ namespace JuiceKing
                     if (z != null) target = z.transform.position;
                     break;
                 default:
-                    // Free play: point at the cheapest pad the player can afford.
-                    var next = UnlockManager.FirstAvailable();
-                    if (next != null && gm.Money >= next.price - next.Paid && gm.Money > 0) target = next.transform.position;
+                    FreePlay(gm, ref text, ref target, ref key);
                     break;
+            }
+
+            // First delivery: walk the player through loading a truck.
+            var dm = DeliveryManager.I;
+            if (step >= 5 && dm != null && dm.Loading && gm.data.stats.deliveries == 0 && dm.bay != null && dm.bay.loadZone != null)
+            {
+                var want = ItemTypes.Juice(dm.Order.kind);
+                string juice = Balance.JuiceNames[(int)dm.Order.kind];
+                if (_player.Contains(t => t == want))
+                {
+                    text = "Load the " + juice + " into the truck!";
+                    target = dm.bay.loadZone.transform.position;
+                }
+                else
+                {
+                    text = "A truck wants " + dm.Order.qty + " " + juice + " - grab some!";
+                    var j = FindJuicer(dm.Order.kind);
+                    target = j != null ? j.outputZone.transform.position : dm.bay.loadZone.transform.position;
+                }
             }
 
             // Carrying slices nobody can juice yet: point at the trash bin so the player is never stuck.
@@ -95,14 +135,90 @@ namespace JuiceKing
                 {
                     var t = _player.items[i].type;
                     if (!t.IsSlice() || gm.HasJuicer(t.Fruit())) continue;
-                    text = "No " + Balance.FruitNames[(int)t.Fruit()] + " juicer yet! Toss them in the trash";
+                    text = "No " + Balance.FruitNames[(int)t.Fruit()] + " " + MachineWord + " yet! Toss them in the trash";
                     target = bin.zone != null ? bin.zone.transform.position : bin.transform.position;
                     break;
                 }
             }
 
-            if (HUD.I != null) HUD.I.SetObjective(text);
+            if (CameraFollow.Busy) target = null;
+            if (HUD.I != null) HUD.I.SetObjective(text, key);
             UpdateMarkers(target);
+        }
+
+        /// <summary>After the tutorial: always show the next goal on the way to completing this world.</summary>
+        void FreePlay(GameManager gm, ref string text, ref Vector3? target, ref string key)
+        {
+            // Standing in the shop: the panel does the talking.
+            if (UpgradePanel.I != null && UpgradePanel.I.IsOpen) return;
+            long money = gm.Money;
+            var next = UnlockManager.FirstAvailable();
+            var up = CheapestUpgrade(out int upDone, out int upTotal);
+            bool shopOpen = upgradeZone != null && upgradeZone.isActiveAndEnabled;
+            bool canUpgrade = shopOpen && up != null && money >= up.Cost();
+
+            if (next != null)
+            {
+                long need = next.Remaining;
+                if (money >= need)
+                {
+                    text = "Unlock the " + next.title + "!";
+                    key = "unlock:" + next.id;
+                    target = next.transform.position;
+                }
+                else if (canUpgrade)
+                {
+                    text = "Upgrade ready: " + up.name + "!";
+                    key = "upgrade:" + up.id;
+                    target = upgradeZone.transform.position;
+                }
+                else
+                {
+                    text = "Next: " + next.title + " - earn $" + Economy.Money(need - money) + " more";
+                    key = "next:" + next.id;
+                }
+                return;
+            }
+
+            // Every pad is open: the last stretch is maxing the upgrades.
+            if (up == null) return;
+            var em = ExpansionManager.I;
+            string goal = em != null && em.nextExpansion == 1 ? "to open the Tropical Farm" : em != null && em.nextExpansion > 1 ? "to open the next world" : "to master the island";
+            text = "Max every upgrade " + goal + "! " + upDone + "/" + upTotal;
+            key = "max";
+            if (canUpgrade) target = upgradeZone.transform.position;
+        }
+
+        /// <summary>Cheapest upgrade that is not maxed yet, plus levels bought / levels in total.</summary>
+        static UpgradeDef CheapestUpgrade(out int done, out int total)
+        {
+            done = 0;
+            total = 0;
+            UpgradeDef best = null;
+            int bestCost = int.MaxValue;
+            foreach (var d in Upgrades.ForWorld(Economy.World))
+            {
+                done += Mathf.Min(d.Level(), d.maxLevel);
+                total += d.maxLevel;
+                if (d.Maxed) continue;
+                int c = d.Cost();
+                if (c >= 0 && c < bestCost)
+                {
+                    bestCost = c;
+                    best = d;
+                }
+            }
+            return best;
+        }
+
+        Juicer _cachedJuicer;
+
+        Juicer FindJuicer(FruitKind k)
+        {
+            if (_cachedJuicer != null && _cachedJuicer.kind == k && _cachedJuicer.isActiveAndEnabled) return _cachedJuicer;
+            foreach (var j in FindObjectsByType<Juicer>(FindObjectsSortMode.None))
+                if (j.kind == k && j.isActiveAndEnabled) return _cachedJuicer = j;
+            return null;
         }
 
         void Advance()

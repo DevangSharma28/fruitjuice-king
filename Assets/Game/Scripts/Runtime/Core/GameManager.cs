@@ -5,9 +5,37 @@ using UnityEngine.SceneManagement;
 
 namespace JuiceKing
 {
+    /// <summary>Lifetime statistics: never reset by an expansion.</summary>
+    [Serializable]
+    public class LifetimeStats
+    {
+        public long earned;
+        public int juiceMade;
+        public int fruitHarvested;
+        public int customersServed;
+        public int deliveries;
+        public long deliveryEarned;
+    }
+
+    /// <summary>The truck currently at (or due at) the delivery bay.</summary>
+    [Serializable]
+    public class DeliverySave
+    {
+        public bool active;
+        public int truck;
+        public int kind;
+        public int qty;
+        public int delivered;
+        public long reward;
+        public string client;
+        public float cooldown = 20f;
+        public float waited;
+    }
+
     [Serializable]
     public class SaveData
     {
+        // ---- current world (reset when entering the next expansion)
         public long money;
         public List<string> unlocked = new List<string>();
         public List<string> paidIds = new List<string>();
@@ -16,6 +44,21 @@ namespace JuiceKing
         public int tutorialStep;
         public int totalSold;
         public long lastSeenTicks;
+        /// <summary>Upgrade levels of data-driven upgrade trees (Expansion 1+), keyed by id.</summary>
+        public List<string> upIds = new List<string>();
+        public List<int> upLevels = new List<int>();
+        public DeliverySave delivery = new DeliverySave();
+        public bool introSeen;
+
+        // ---- permanent / meta
+        /// <summary>0 in saves written before Expansion 1 (field absent), <see cref="GameManager.SaveVersion"/> after migration.</summary>
+        public int saveVersion;
+        /// <summary>0 = original farm, 1 = Tropical Farm.</summary>
+        public int expansion;
+        public bool world0Complete;
+        /// <summary>JSON snapshot of the finished original farm.</summary>
+        public string world0Archive;
+        public LifetimeStats stats = new LifetimeStats();
     }
 
     public enum UpgradeKind { Saw, Bag, Speed, Price, Counter }
@@ -25,11 +68,17 @@ namespace JuiceKing
     public class GameManager : MonoBehaviour
     {
         const string SaveKey = "juiceking_save_v1";
+        public const int SaveVersion = 2;
 
         public static GameManager I { get; private set; }
 
         public long startMoney = 0;
+        [Tooltip("Which expansion this scene hosts (0 = original farm, 1 = Tropical Farm).")]
+        public int sceneExpansion;
         public SaveData data = new SaveData();
+
+        /// <summary>True while this scene is handing over to the scene of the saved expansion.</summary>
+        public static bool Redirecting { get; private set; }
 
         public event Action<long, long> MoneyChanged; // (newValue, delta)
         public event Action UpgradesChanged;
@@ -59,6 +108,20 @@ namespace JuiceKing
             QualitySettings.vSyncCount = 0;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Load();
+
+            // The save belongs to another world: switch scenes before anything else in this one wakes up.
+            if (data.expansion != sceneExpansion)
+            {
+                Redirecting = true;
+                foreach (var go in gameObject.scene.GetRootGameObjects())
+                    if (go != gameObject && go.GetComponent<Camera>() == null) go.SetActive(false);
+                foreach (var mb in GetComponents<MonoBehaviour>())
+                    if (mb != this && !(mb is GameRefs)) mb.enabled = false;
+                enabled = false;
+                SceneManager.LoadScene(ExpansionManager.SceneName(data.expansion));
+                return;
+            }
+            Redirecting = false;
         }
 
         void Update()
@@ -72,6 +135,7 @@ namespace JuiceKing
             {
                 if (kb.mKey.wasPressedThisFrame) AddMoney(500);
                 if (kb.f9Key.wasPressedThisFrame) ResetProgress();
+                if (kb.f10Key.wasPressedThisFrame) ExpansionManager.DebugComplete();
             }
 #endif
         }
@@ -89,6 +153,7 @@ namespace JuiceKing
         {
             if (amount == 0) return;
             data.money += amount;
+            if (amount > 0) data.stats.earned += amount;
             _dirty = true;
             MoneyChanged?.Invoke(data.money, amount);
         }
@@ -103,12 +168,50 @@ namespace JuiceKing
         public void NotifyJuiceSold(int count)
         {
             data.totalSold += count;
+            data.stats.customersServed++;
             _dirty = true;
             JuiceSold?.Invoke();
         }
 
-        /// <summary>Sale price of one juice cup, including the recipe upgrade.</summary>
-        public int JuicePrice(FruitKind k) => Mathf.RoundToInt(Balance.JuicePrice[(int)k] * Balance.PriceMult(data.priceLevel));
+        public void NotifyJuiceMade() => data.stats.juiceMade++;
+        public void NotifyFruitHarvested() => data.stats.fruitHarvested++;
+
+        /// <summary>Sale price of one juice cup, including the recipe / juice-price upgrade.</summary>
+        public int JuicePrice(FruitKind k) => Mathf.RoundToInt(Balance.JuicePrice[(int)k] * Economy.PriceMult);
+
+        // ---------------- Data-driven upgrades (Expansion 1+) ----------------
+
+        public int GetUpgrade(string id)
+        {
+            int i = data.upIds.IndexOf(id);
+            return i >= 0 ? data.upLevels[i] : 0;
+        }
+
+        public void SetUpgrade(string id, int level)
+        {
+            int i = data.upIds.IndexOf(id);
+            if (i < 0)
+            {
+                data.upIds.Add(id);
+                data.upLevels.Add(level);
+            }
+            else data.upLevels[i] = level;
+            _dirty = true;
+        }
+
+        /// <summary>Buy the next level of a data-driven upgrade.</summary>
+        public bool TryBuy(UpgradeDef def)
+        {
+            int cost = def.Cost();
+            if (cost < 0 || !TrySpend(cost)) return false;
+            def.Apply();
+            _dirty = true;
+            Save();
+            UpgradesChanged?.Invoke();
+            return true;
+        }
+
+        public void RaiseUpgradesChanged() => UpgradesChanged?.Invoke();
 
         // ---------------- Unlocks ----------------
 
@@ -206,6 +309,16 @@ namespace JuiceKing
         {
             int cost = GetCost(k);
             if (cost < 0 || !TrySpend(cost)) return false;
+            ApplyClassicUpgrade(k);
+            _dirty = true;
+            Save();
+            UpgradesChanged?.Invoke();
+            return true;
+        }
+
+        /// <summary>Raise one of the original farm's upgrade levels (no payment).</summary>
+        public void ApplyClassicUpgrade(UpgradeKind k)
+        {
             switch (k)
             {
                 case UpgradeKind.Saw: data.sawLevel++; break;
@@ -215,9 +328,6 @@ namespace JuiceKing
                 default: data.counterLevel++; break;
             }
             _dirty = true;
-            Save();
-            UpgradesChanged?.Invoke();
-            return true;
         }
 
         // ---------------- Tutorial ----------------
@@ -234,18 +344,15 @@ namespace JuiceKing
 
         // ---------------- Offline earnings ----------------
 
-        static readonly string[] HelperIds = { "hire_waiter", "farmer_orange", "farmer_melon", "farmer_pine" };
-        static readonly string[] JuicerIds = { "melon_juicer", "pine_juicer" };
-
         /// <summary>Money earned while away, based on hired helpers. Zero when nothing is owed.</summary>
         public long OfflineEarnings()
         {
             if (AwaySeconds < Balance.OfflineMinSeconds) return 0;
             int helpers = 0, juicers = 1;
-            foreach (var id in HelperIds) if (IsUnlocked(id)) helpers++;
-            foreach (var id in JuicerIds) if (IsUnlocked(id)) juicers++;
+            foreach (var id in Economy.HelperIds) if (IsUnlocked(id)) helpers++;
+            foreach (var id in Economy.MixerIds) if (IsUnlocked(id)) juicers++;
             double secs = Math.Min(AwaySeconds, Balance.OfflineMaxSeconds);
-            return (long)(secs * Balance.OfflineRate(juicers, helpers) * Balance.PriceMult(data.priceLevel));
+            return (long)(secs * Economy.OfflineRate(juicers, helpers) * Economy.PriceMult);
         }
 
         /// <summary>Only pay offline earnings once per session.</summary>
@@ -275,6 +382,22 @@ namespace JuiceKing
                 data = new SaveData { money = startMoney };
             }
 
+            if (data.stats == null) data.stats = new LifetimeStats();
+            if (data.delivery == null) data.delivery = new DeliverySave();
+            if (data.upIds == null) data.upIds = new List<string>();
+            if (data.upLevels == null) data.upLevels = new List<int>();
+            // v1 saves had no lifetime stats: seed "customers served" from cups sold so the completion screen is sensible.
+            if (data.saveVersion < SaveVersion)
+            {
+                // Lifetime totals that older builds never tracked: estimate from cups sold (about $11 a cup, 2 slices per
+                // cup, ~3.5 slices per fruit) so the completion screen does not show zeros.
+                data.saveVersion = SaveVersion;
+                if (data.stats.customersServed == 0) data.stats.customersServed = data.totalSold / 2;
+                if (data.stats.juiceMade == 0) data.stats.juiceMade = data.totalSold;
+                if (data.stats.earned == 0) data.stats.earned = data.totalSold * 11L + data.money;
+                if (data.stats.fruitHarvested == 0) data.stats.fruitHarvested = Mathf.RoundToInt(data.totalSold * 2f / 3.5f);
+            }
+
             AwaySeconds = 0;
             if (data.lastSeenTicks > 0)
             {
@@ -290,7 +413,55 @@ namespace JuiceKing
             PlayerPrefs.Save();
             data = new SaveData { money = startMoney };
             _dirty = false;
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            LoadingScreen.LoadSavedWorld();
+        }
+
+        /// <summary>Which world the save is in, read without loading a scene (the boot loading screen uses it).</summary>
+        public static int PeekSavedExpansion()
+        {
+            var json = PlayerPrefs.GetString(SaveKey, "");
+            if (string.IsNullOrEmpty(json)) return 0;
+            try
+            {
+                var d = JsonUtility.FromJson<SaveData>(json);
+                return d != null ? Mathf.Max(0, d.expansion) : 0;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// Finish the current world and move to the next expansion: archive the finished world, reset per-world progress,
+        /// keep lifetime stats and settings.
+        /// </summary>
+        public void BeginExpansion(int expansion, long startingMoney)
+        {
+            if (data.expansion == 0)
+            {
+                var snap = new SaveData
+                {
+                    money = data.money, unlocked = new List<string>(data.unlocked), sawLevel = data.sawLevel, bagLevel = data.bagLevel,
+                    speedLevel = data.speedLevel, priceLevel = data.priceLevel, counterLevel = data.counterLevel,
+                    tutorialStep = data.tutorialStep, totalSold = data.totalSold
+                };
+                data.world0Archive = JsonUtility.ToJson(snap);
+                data.world0Complete = true;
+            }
+            data.expansion = expansion;
+            data.money = startingMoney;
+            data.unlocked.Clear();
+            data.paidIds.Clear();
+            data.paidAmounts.Clear();
+            data.sawLevel = data.bagLevel = data.speedLevel = data.priceLevel = data.counterLevel = 0;
+            data.upIds.Clear();
+            data.upLevels.Clear();
+            data.tutorialStep = 0;
+            data.totalSold = 0;
+            data.delivery = new DeliverySave();
+            data.introSeen = false;
+            Save();
         }
     }
 }

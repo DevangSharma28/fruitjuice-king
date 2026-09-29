@@ -5,7 +5,7 @@ using static JuiceKing.EditorTools.Painter;
 namespace JuiceKing.EditorTools
 {
     /// <summary>Generates every texture / sprite the game uses (no hand-made art required).</summary>
-    public static class ArtGen
+    public static partial class ArtGen
     {
         public const string Dir = "Assets/Game/Generated/Textures/";
 
@@ -22,6 +22,7 @@ namespace JuiceKing.EditorTools
             Icons();
             FxTextures();
             WorldTextures();
+            TropicalArt();
         }
 
         // ---------------------------------------------------------------- shape helpers

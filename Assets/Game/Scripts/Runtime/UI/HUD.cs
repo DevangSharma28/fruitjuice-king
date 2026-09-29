@@ -35,7 +35,9 @@ namespace JuiceKing
 
         double _shown;
         string _objective = "\u0001";
+        string _objectiveKey;
         float _progressShown = -1f;
+        int _progressPct = -1;
         readonly Stack<Image> _coinPool = new Stack<Image>();
         Canvas _canvas;
         int _flying;
@@ -99,28 +101,44 @@ namespace JuiceKing
 
             if (progressFill != null)
             {
-                int total = Mathf.Max(1, UnlockManager.TotalCount);
-                int done = UnlockManager.UnlockedCount;
+                // World progress: every unlock pad plus every upgrade level (all of it opens the next world).
+                ExpansionManager.Progress(out int done, out int total);
+                total = Mathf.Max(1, total);
                 float goal = done / (float)total;
                 _progressShown = _progressShown < 0f ? goal : Mathf.MoveTowards(_progressShown, goal, Time.deltaTime * 0.6f);
                 progressFill.fillAmount = _progressShown;
-                if (progressText != null) progressText.text = done >= total ? "MAX" : done + "/" + total;
+                if (progressText != null)
+                {
+                    int pct = done >= total ? 100 : Mathf.Min(99, Mathf.FloorToInt(goal * 100f));
+                    if (pct != _progressPct)
+                    {
+                        _progressPct = pct;
+                        progressText.text = done >= total ? "MAX" : pct + "%";
+                    }
+                }
             }
         }
 
-        public void SetObjective(string text)
+        /// <summary>
+        /// Objective plank. The plank pops when the goal changes (<paramref name="key"/>, default: the text); text that
+        /// only updates a number ("earn $120 more") just changes in place.
+        /// </summary>
+        public void SetObjective(string text, string key = null)
         {
             if (text == _objective) return;
             _objective = text;
             if (objectivePanel == null) return;
             bool show = !string.IsNullOrEmpty(text);
+            string k = key ?? text;
             if (show)
             {
+                bool pop = k != _objectiveKey || !objectivePanel.gameObject.activeSelf;
                 objectiveText.text = text;
                 objectivePanel.gameObject.SetActive(true);
-                Tweener.Scale(objectivePanel, Vector3.one * 0.6f, Vector3.one, 0.35f, Ease.OutBack);
+                if (pop) Tweener.Scale(objectivePanel, Vector3.one * 0.6f, Vector3.one, 0.35f, Ease.OutBack);
             }
             else objectivePanel.gameObject.SetActive(false);
+            _objectiveKey = show ? k : null;
         }
 
         /// <summary>Short message that drops in under the objective, then slides away.</summary>

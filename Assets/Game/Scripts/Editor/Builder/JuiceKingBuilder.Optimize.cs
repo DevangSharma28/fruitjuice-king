@@ -12,6 +12,7 @@ namespace JuiceKing.EditorTools
     public static partial class JuiceKingBuilder
     {
         static int _combineSerial;
+        static string _combineDir = "Combined/";
 
         /// <summary>
         /// Merge every plain MeshRenderer under <paramref name="parent"/> (except inside <paramref name="keep"/> subtrees)
@@ -61,7 +62,7 @@ namespace JuiceKing.EditorTools
                 var combined = new Mesh { name = parent.name + "_" + kv.Key.name, indexFormat = IndexFormat.UInt32 };
                 combined.CombineMeshes(kv.Value.ToArray(), true, true);
                 combined.RecalculateBounds();
-                var saved = SaveMesh(combined, "Combined/" + parent.name + "_" + kv.Key.name.Replace('/', '_') + "_" + (_combineSerial++));
+                var saved = SaveMesh(combined, _combineDir + parent.name + "_" + kv.Key.name.Replace('/', '_') + "_" + (_combineSerial++));
                 var go = B.MeshObj("Combined_" + kv.Key.name, parent, saved, kv.Key, Vector3.zero, Vector3.one, null, shadow[kv.Key]);
                 go.layer = parent.gameObject.layer;
             }
@@ -87,11 +88,23 @@ namespace JuiceKing.EditorTools
         }
 
         /// <summary>Run after the scene is assembled.</summary>
-        static void OptimizeScene()
+        static void OptimizeScene(string sceneKey)
         {
-            System.IO.Directory.CreateDirectory(Gen + "Meshes/Combined");
-            foreach (var old in AssetDatabase.FindAssets("t:Mesh", new[] { Gen + "Meshes/Combined" }))
+            // Each scene owns its folder of merged meshes, so rebuilding one world never deletes the other's.
+            _combineDir = "Combined/" + sceneKey + "/";
+            string dir = Gen + "Meshes/" + _combineDir.TrimEnd('/');
+            System.IO.Directory.CreateDirectory(dir);
+            AssetDatabase.Refresh();
+            foreach (var old in AssetDatabase.FindAssets("t:Mesh", new[] { dir }))
                 AssetDatabase.DeleteAsset(AssetDatabase.GUIDToAssetPath(old));
+            // Meshes from before per-scene folders sit directly in Combined/: no scene uses them after this rebuild.
+            string legacy = Gen + "Meshes/Combined";
+            if (sceneKey == "JuiceKing")
+            foreach (var old in AssetDatabase.FindAssets("t:Mesh", new[] { legacy }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(old);
+                if (System.IO.Path.GetDirectoryName(path).Replace('\\', '/') == legacy) AssetDatabase.DeleteAsset(path);
+            }
             _combineSerial = 0;
 
             // Juicers: everything except the animated bits.

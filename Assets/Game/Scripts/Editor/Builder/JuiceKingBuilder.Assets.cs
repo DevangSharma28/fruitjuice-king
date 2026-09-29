@@ -14,13 +14,14 @@ namespace JuiceKing.EditorTools
         const string Prefabs = "Assets/Game/Prefabs/";
         public const float CharScale = 2.2f;
 
-        static readonly string[] FruitKey = { "Orange", "Watermelon", "Pineapple" };
+        static readonly string[] FruitKey = { "Orange", "Watermelon", "Pineapple", "Coconut", "Mango", "Banana", "Papaya" };
+        const int FruitN = ItemTypes.FruitCount;
         static readonly string[] FruitModel = { "Food/orange", "Food/watermelon", "Food/pineapple" };
 
         // Shared assets created in BuildAssets()
         static Mesh _disc, _cup, _funnel, _crown, _arrow, _quadXZ;
         static Material _mWhite, _mDark, _mSteel, _mGold, _mWood, _mGlass, _mBill, _mRed;
-        static Material[] _mJuice = new Material[3], _mSliceTop = new Material[3], _mSliceRind = new Material[3], _mFruitBody = new Material[3];
+        static Material[] _mJuice = new Material[FruitN], _mSliceTop = new Material[FruitN], _mSliceRind = new Material[FruitN], _mFruitBody = new Material[FruitN];
         static Material _mPadSolid, _mPadDashed, _mPadFill, _mPointer, _mParticle, _mBlob, _mWhiteSprite;
         static Material _mGrass, _mTiles, _mSoil, _mRoad, _mSidewalk, _mAwning, _mChain, _mOrangeBody;
         static Sprite _sRound, _sButton, _sCircle, _sRing, _sWhite, _sMoney, _sJuice, _sSaw, _sBag, _sSpeed, _sWorker, _sStar, _sHeart, _sSoundOn, _sSoundOff;
@@ -34,17 +35,22 @@ namespace JuiceKing.EditorTools
             _uRocket, _uWarning, _uBtnCream, _uBadgeAd, _uSqWood, _uSqBlue, _uSqGreen, _uSqOrange, _uRibbonYellow, _uBubbleWhite, _uPanelGold;
         static Material[] _mFx = new Material[(int)FxShape.Count];
         static Material _mWater, _mPath, _mCloud, _mHedge, _mBinGreen, _mBinDark, _mAnimal, _mDuckBody, _mDuckBeak, _mLily, _mStone, _mHay, _mRoof, _mWhiteWall, _mPink, _mBlue, _mButterfly;
-        static Sprite[] _sFruit = new Sprite[3];
+        static Sprite[] _sFruit = new Sprite[FruitN];
+        static Sprite[] _sJuiceIcons = new Sprite[FruitN];
+        static Sprite _sParcel;
+        static Sprite _sTruck, _sClock, _sSprout, _sMoon, _sCups, _sGlowRing, _sRingProgress;
+        static Material _mShell, _mCream, _mUmbrella, _mCherry;
         static RuntimeAnimatorController _controller;
 
-        static StackItem[] _slicePrefabs = new StackItem[3], _juicePrefabs = new StackItem[3];
+        static StackItem[] _slicePrefabs = new StackItem[FruitN], _juicePrefabs = new StackItem[FruitN];
         static StackItem _moneyPrefab;
         static FloatingText _floatingText;
         static List<GameObject> _customerPrefabs = new List<GameObject>();
 
         static readonly Color[] SliceRind =
         {
-            new Color(1f, 0.52f, 0.05f), new Color(0.2f, 0.52f, 0.22f), new Color(0.72f, 0.48f, 0.14f)
+            new Color(1f, 0.52f, 0.05f), new Color(0.2f, 0.52f, 0.22f), new Color(0.72f, 0.48f, 0.14f),
+            new Color(0.45f, 0.28f, 0.14f), new Color(1f, 0.62f, 0.15f), new Color(0.98f, 0.9f, 0.55f), new Color(1f, 0.55f, 0.25f)
         };
 
         // ------------------------------------------------------------------ fonts
@@ -179,8 +185,8 @@ namespace JuiceKing.EditorTools
             _mRoad = MatLib.Lit("Ground_Road", Color.white, 0.1f, MatLib.Tex("ground_road.png"), new Vector2(30f, 2f));
             _mSidewalk = MatLib.Lit("Ground_Sidewalk", new Color(0.86f, 0.86f, 0.86f), 0.1f, MatLib.Tex("ground_tiles.png"), new Vector2(30f, 0.8f));
 
-            string[] sliceTex = { "slice_orange.png", "slice_watermelon.png", "slice_pineapple.png" };
-            for (int i = 0; i < 3; i++)
+            string[] sliceTex = { "slice_orange.png", "slice_watermelon.png", "slice_pineapple.png", "slice_coconut.png", "slice_mango.png", "slice_banana.png", "slice_papaya.png" };
+            for (int i = 0; i < FruitN; i++)
             {
                 _mJuice[i] = MatLib.Lit("Juice_" + FruitKey[i], Balance.JuiceColors[i], 0.75f);
                 _mSliceTop[i] = MatLib.Lit("SliceTop_" + FruitKey[i], Color.white, 0.35f, MatLib.Tex(sliceTex[i]));
@@ -319,6 +325,40 @@ namespace JuiceKing.EditorTools
             _sFruit[0] = MatLib.Spr("icon_orange.png");
             _sFruit[1] = MatLib.Spr("icon_watermelon.png");
             _sFruit[2] = MatLib.Spr("icon_pineapple.png");
+            for (int i = 0; i < ArtGen.TropicalFruitIcons.Length; i++) _sFruit[3 + i] = MatLib.Spr(ArtGen.TropicalFruitIcons[i]);
+            for (int i = 0; i < FruitN; i++) _sJuiceIcons[i] = MatLib.Spr(ArtGen.JuiceIconFile(i));
+            _sTruck = MatLib.Spr("icon_truck.png");
+            _sParcel = MatLib.Spr("icon_parcel.png");
+            _sClock = MatLib.Spr("icon_clock.png");
+            _sSprout = MatLib.Spr("icon_sprout.png");
+            _sMoon = MatLib.Spr("icon_moon.png");
+            _sCups = MatLib.Spr("icon_cups.png");
+            _sGlowRing = MatLib.Spr("glow_ring.png");
+            _sRingProgress = MatLib.Spr("ring_progress.png");
+            _mShell = MatLib.Lit("CoconutShell", new Color(0.5f, 0.31f, 0.16f), 0.15f);
+            _mCream = MatLib.Lit("Cream", new Color(1f, 0.98f, 0.93f), 0.35f);
+            _mUmbrella = MatLib.Lit("Umbrella", new Color(1f, 0.4f, 0.55f), 0.3f);
+            _mCherry = MatLib.Lit("Cherry", new Color(0.9f, 0.1f, 0.18f), 0.7f);
+        }
+
+        /// <summary>Upgrade icon lookup shared by both worlds (keys match UpgradeDef.icon).</summary>
+        static void UpgradeIconTable(out string[] keys, out Sprite[] sprites)
+        {
+            var map = new (string, Sprite)[]
+            {
+                ("saw", _uChainsaw ? _uChainsaw : _sSaw), ("bag", _uBackpack ? _uBackpack : _sBag), ("speed", _uLightning ? _uLightning : _sSpeed),
+                ("recipe", _uChef ? _uChef : _sPrice), ("counter", _uTable ? _uTable : _sStar), ("yield", _sFruit[4]), ("regrow", _sSprout),
+                ("mixspeed", _uRocket ? _uRocket : _sTurbo), ("mixout", _sCups), ("mixcap", _uMachine ? _uMachine : _sJuice),
+                ("truckreward", _uCoins ? _uCoins : _sCash2x), ("trucksize", _sTruck), ("truckfreq", _sClock), ("premium", _uCrown ? _uCrown : _sCrown),
+                ("carryspeed", _sSneaker), ("wspeed", _uFarmer ? _uFarmer : _sWorker), ("wcarry", _uWaiter ? _uWaiter : _sWorker), ("offline", _sMoon),
+            };
+            keys = new string[map.Length];
+            sprites = new Sprite[map.Length];
+            for (int i = 0; i < map.Length; i++)
+            {
+                keys[i] = map[i].Item1;
+                sprites[i] = map[i].Item2;
+            }
         }
 
         // ------------------------------------------------------------------ item prefabs
@@ -331,14 +371,19 @@ namespace JuiceKing.EditorTools
 
         static void BuildItemPrefabs()
         {
-            for (int f = 0; f < 3; f++)
+            for (int f = 0; f < FruitN; f++)
             {
                 // Fruit slice: a chunky round slice that stacks like coins.
                 var root = new GameObject("Slice_" + FruitKey[f]);
                 var si = root.AddComponent<StackItem>();
                 si.type = ItemTypes.Slice((FruitKind)f);
                 si.height = 0.13f;
-                SliceVisual(f, root.transform, Vector3.zero, 0.46f, 0.12f);
+                // Tropical pieces differ in shape as well as colour: chunky coconut, flat mango cheek, small banana coin.
+                float dia = f == 3 ? 0.44f : f == 5 ? 0.36f : 0.46f;
+                float thick = f == 3 ? 0.12f : f == 5 ? 0.11f : 0.12f;
+                SliceVisual(f, root.transform, Vector3.zero, dia, thick);
+                // Shell dome kept inside the piece's own height so stacked pieces don't poke into each other.
+                if (f == 3) B.MeshObj("Shell", root.transform, B.Sphere, _mShell, new Vector3(0f, 0.035f, 0f), new Vector3(0.42f, 0.07f, 0.42f));
                 _slicePrefabs[f] = B.SavePrefab(root, Prefabs + "Items/Slice_" + FruitKey[f] + ".prefab").GetComponent<StackItem>();
 
                 // Juice cup: tapered cup + lid + straw + fruit garnish.
@@ -347,13 +392,8 @@ namespace JuiceKing.EditorTools
                 si.type = ItemTypes.Juice((FruitKind)f);
                 si.height = 0.37f;
                 var v = B.Node("Visual", root.transform, Vector3.zero).transform;
-                // Juice-coloured cup (top reads clearly from the high camera), white band, straw and a fruit garnish.
-                B.MeshObj("Cup", v, _cup, _mJuice[f], Vector3.zero, new Vector3(0.28f, 0.3f, 0.28f));
-                B.MeshObj("Band", v, _disc, new[] { _mWhite, _mWhite }, new Vector3(0f, 0.1f, 0f), new Vector3(0.264f, 0.08f, 0.264f));
-                B.MeshObj("Rim", v, _disc, new[] { _mWhite, _mWhite }, new Vector3(0f, 0.292f, 0f), new Vector3(0.3f, 0.018f, 0.3f));
-                B.MeshObj("Top", v, _disc, new[] { _mJuice[f], _mJuice[f] }, new Vector3(0f, 0.3f, 0f), new Vector3(0.26f, 0.012f, 0.26f));
-                B.MeshObj("Straw", v, _disc, new[] { _mRed, _mRed }, new Vector3(0.04f, 0.26f, 0.02f), new Vector3(0.035f, 0.22f, 0.035f), new Vector3(0f, 0f, -16f));
-                SliceVisual(f, v, new Vector3(-0.02f, 0.28f, -0.12f), 0.17f, 0.035f, new Vector3(-70f, 0f, 0f));
+                if (f < 3) TakeawayCupVisual(f, v);
+                else TropicalCupVisual(f, v);
                 _juicePrefabs[f] = B.SavePrefab(root, Prefabs + "Items/Juice_" + FruitKey[f] + ".prefab").GetComponent<StackItem>();
             }
 
@@ -373,6 +413,70 @@ namespace JuiceKing.EditorTools
             ft.text = tmp;
             _floatingText = B.SavePrefab(ftGo, Prefabs + "FX/FloatingText.prefab").GetComponent<FloatingText>();
         }
+
+        /// <summary>Juice-coloured cup (top reads clearly from the high camera), white band, straw and a fruit garnish.</summary>
+        static void TakeawayCupVisual(int f, Transform v)
+        {
+            B.MeshObj("Cup", v, _cup, _mJuice[f], Vector3.zero, new Vector3(0.28f, 0.3f, 0.28f));
+            B.MeshObj("Band", v, _disc, new[] { _mWhite, _mWhite }, new Vector3(0f, 0.1f, 0f), new Vector3(0.264f, 0.08f, 0.264f));
+            B.MeshObj("Rim", v, _disc, new[] { _mWhite, _mWhite }, new Vector3(0f, 0.292f, 0f), new Vector3(0.3f, 0.018f, 0.3f));
+            B.MeshObj("Top", v, _disc, new[] { _mJuice[f], _mJuice[f] }, new Vector3(0f, 0.3f, 0f), new Vector3(0.26f, 0.012f, 0.26f));
+            B.MeshObj("Straw", v, _disc, new[] { _mRed, _mRed }, new Vector3(0.04f, 0.26f, 0.02f), new Vector3(0.035f, 0.22f, 0.035f), new Vector3(0f, 0f, -16f));
+            SliceVisual(f, v, new Vector3(-0.02f, 0.28f, -0.12f), 0.17f, 0.035f, new Vector3(-70f, 0f, 0f));
+        }
+
+        /// <summary>
+        /// Each tropical drink has its own vessel so stacks read at a glance: shell, tumbler, shake glass, goblet.
+        /// Every vessel stays within the stacking slot (about 0.3 m wide, 0.37 m tall) so trays and counters stack cleanly.
+        /// </summary>
+        static void TropicalCupVisual(int f, Transform v)
+        {
+            var juice = _mJuice[f];
+            switch ((FruitKind)f)
+            {
+                case FruitKind.Coconut:
+                    // Half coconut shell with milk, a straw and a tiny umbrella.
+                    // Coconut-shell cup: a tapered brown shell with a rounded base, a white flesh rim and milk on top.
+                    // Cup-shaped (not a ball) so a tray of them stacks into neat rows with white tops.
+                    B.MeshObj("Base", v, B.Sphere, _mShell, new Vector3(0f, 0.06f, 0f), new Vector3(0.22f, 0.12f, 0.22f));
+                    B.MeshObj("Shell", v, _cup, _mShell, new Vector3(0f, 0.02f, 0f), new Vector3(0.26f, 0.24f, 0.26f));
+                    B.MeshObj("Flesh", v, _disc, new[] { _mCream, _mCream }, new Vector3(0f, 0.25f, 0f), new Vector3(0.275f, 0.03f, 0.275f));
+                    B.MeshObj("Milk", v, _disc, new[] { juice, juice }, new Vector3(0f, 0.262f, 0f), new Vector3(0.22f, 0.01f, 0.22f));
+                    B.MeshObj("Straw", v, _disc, new[] { _mBlue, _mBlue }, new Vector3(0.04f, 0.25f, 0.02f), new Vector3(0.03f, 0.1f, 0.03f), new Vector3(0f, 0f, -18f));
+                    B.MeshObj("Umbrella", v, MakeUmbrella(), _mUmbrella, new Vector3(-0.05f, 0.32f, -0.03f), new Vector3(0.12f, 0.04f, 0.12f), new Vector3(0f, 0f, 12f));
+                    break;
+                case FruitKind.Mango:
+                    // Tall tumbler: juice column inside clear glass, mango wedge on the rim.
+                    B.MeshObj("Juice", v, _cup, juice, new Vector3(0f, 0.01f, 0f), new Vector3(0.23f, 0.29f, 0.23f));
+                    B.MeshObj("Glass", v, _cup, _mGlass, Vector3.zero, new Vector3(0.27f, 0.34f, 0.27f), null, false);
+                    B.MeshObj("Top", v, _disc, new[] { juice, juice }, new Vector3(0f, 0.3f, 0f), new Vector3(0.28f, 0.012f, 0.28f));
+                    B.MeshObj("Straw", v, _disc, new[] { _mYellowStraw(), _mYellowStraw() }, new Vector3(0.04f, 0.28f, 0.02f), new Vector3(0.035f, 0.22f, 0.035f), new Vector3(0f, 0f, -14f));
+                    SliceVisual(f, v, new Vector3(-0.1f, 0.31f, -0.06f), 0.15f, 0.05f, new Vector3(-60f, 20f, 0f));
+                    break;
+                case FruitKind.Banana:
+                    // Milkshake: pale glass, cream dome, cherry and a banana coin.
+                    B.MeshObj("Cup", v, _cup, juice, Vector3.zero, new Vector3(0.28f, 0.26f, 0.28f));
+                    B.MeshObj("Band", v, _disc, new[] { _mPink, _mPink }, new Vector3(0f, 0.08f, 0f), new Vector3(0.262f, 0.06f, 0.262f));
+                    B.MeshObj("Cream", v, B.Sphere, _mCream, new Vector3(0f, 0.26f, 0f), new Vector3(0.28f, 0.13f, 0.28f));
+                    B.MeshObj("Cherry", v, B.Sphere, _mCherry, new Vector3(0f, 0.33f, 0f), Vector3.one * 0.06f);
+                    B.MeshObj("Straw", v, _disc, new[] { _mRed, _mRed }, new Vector3(0.06f, 0.26f, 0.03f), new Vector3(0.035f, 0.2f, 0.035f), new Vector3(0f, 0f, -20f));
+                    SliceVisual(f, v, new Vector3(-0.09f, 0.3f, -0.06f), 0.12f, 0.04f, new Vector3(-55f, 0f, 0f));
+                    break;
+                default:
+                    // Papaya goblet: stem + bowl, green rim, papaya slice garnish.
+                    B.MeshObj("Foot", v, _disc, new[] { _mGlass, _mGlass }, Vector3.zero, new Vector3(0.2f, 0.02f, 0.2f), null, false);
+                    B.MeshObj("Stem", v, _disc, new[] { _mGlass, _mGlass }, new Vector3(0f, 0.02f, 0f), new Vector3(0.05f, 0.1f, 0.05f), null, false);
+                    B.MeshObj("Bowl", v, _cup, juice, new Vector3(0f, 0.11f, 0f), new Vector3(0.28f, 0.19f, 0.28f));
+                    B.MeshObj("Rim", v, _disc, new[] { _mLeafTrim(), _mLeafTrim() }, new Vector3(0f, 0.29f, 0f), new Vector3(0.3f, 0.02f, 0.3f));
+                    B.MeshObj("Top", v, _disc, new[] { juice, juice }, new Vector3(0f, 0.3f, 0f), new Vector3(0.27f, 0.012f, 0.27f));
+                    B.MeshObj("Straw", v, _disc, new[] { _mBinGreen, _mBinGreen }, new Vector3(0.04f, 0.28f, 0.02f), new Vector3(0.035f, 0.2f, 0.035f), new Vector3(0f, 0f, -16f));
+                    SliceVisual(f, v, new Vector3(-0.02f, 0.3f, -0.13f), 0.17f, 0.04f, new Vector3(-70f, 0f, 0f));
+                    break;
+            }
+        }
+
+        static Material _mYellowStraw() => MatLib.Lit("StrawYellow", new Color(1f, 0.85f, 0.2f), 0.4f);
+        static Material _mLeafTrim() => MatLib.Lit("LeafTrim", new Color(0.4f, 0.75f, 0.3f), 0.3f);
 
         // ------------------------------------------------------------------ characters
 
@@ -562,9 +666,12 @@ namespace JuiceKing.EditorTools
             var icon = B.Sprite("Icon", go.transform, _sFruit[0], new Vector3(-0.25f, 0.02f, -0.01f), 0.22f, false, 11);
             var count = B.Text("Count", go.transform, "1", 5f, new Color(0.25f, 0.2f, 0.2f), new Vector3(0.3f, 0.02f, -0.01f), false);
             count.GetComponent<MeshRenderer>().sortingOrder = 12;
-            var happy = B.Sprite("Happy", go.transform, _uHeartBubble ? _uHeartBubble : _sHeart, new Vector3(0f, 0.12f, -0.02f), 1.1f, false, 13);
+            // Faces replace the order inside the bubble, so they are sized to the bubble (~0.6 m), not to the sprite's pixels.
+            var heartSprite = _uHeartBubble ? _uHeartBubble : _sHeart;
+            var sadSprite = _uExclBubble ? _uExclBubble : _sHeart;
+            var happy = B.Sprite("Happy", go.transform, heartSprite, new Vector3(0f, 0.04f, -0.02f), SpriteScale(heartSprite, 0.62f), false, 13);
             happy.gameObject.SetActive(false);
-            var sad = B.Sprite("Sad", go.transform, _uExclBubble ? _uExclBubble : _sHeart, new Vector3(0f, 0.12f, -0.02f), 1.1f, false, 13);
+            var sad = B.Sprite("Sad", go.transform, sadSprite, new Vector3(0f, 0.04f, -0.02f), SpriteScale(sadSprite, 0.6f), false, 13);
             sad.gameObject.SetActive(false);
 
             // Patience bar under the order.

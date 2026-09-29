@@ -132,7 +132,7 @@ namespace JuiceKing.EditorTools
             return b;
         }
 
-        static void BuildUI(Transform systems, out HUD hud)
+        static void BuildUI(Transform systems, out HUD hud, int world = 0)
         {
             var canvasGo = new GameObject("UI", typeof(RectTransform));
             var canvas = canvasGo.AddComponent<Canvas>();
@@ -169,6 +169,8 @@ namespace JuiceKing.EditorTools
             // ---------------- safe area root for all HUD
             var safe = Stretch("Safe", root);
             safe.gameObject.AddComponent<SafeArea>();
+            // Lets cinematics fade the whole HUD out and back in.
+            _uiSafeGroup = safe.gameObject.AddComponent<CanvasGroup>();
 
             // Money pill (top centre): coin overlapping a dark capsule.
             var money = UIRect("Money", safe, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(30f, -40f), new Vector2(390f, 112f));
@@ -299,69 +301,22 @@ namespace JuiceKing.EditorTools
             _edgeArrow = edge;
             _edgeArea = edgeArea;
 
+            var subRt = UIRect("Subtitle", banner, new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), new Vector2(0f, 6f), new Vector2(660f, 76f));
+            Sliced(subRt, _uNote ? _uNote : _sPanel, 1.1f);
+            var subT = Label(Stretch("Text", subRt, 30f, 30f, 8f, 12f), "", 36f, UiInk, TextAlignmentOptions.Center, false);
+            subT.enableAutoSizing = true;
+            subT.fontSizeMin = 24f;
+            subT.fontSizeMax = 36f;
+            subRt.gameObject.SetActive(false);
+
             var ub = bannerRoot.gameObject.AddComponent<UnlockBanner>();
             ub.banner = banner;
             ub.titleText = bTitle;
+            ub.subtitleText = subT;
             ub.icon = bIconImg;
 
             // ---------------- upgrade shop (awning panel)
-            var panelRoot = Stretch("UpgradePanel", safe);
-            string[] names = { "Chainsaw", "Backpack", "Speed", "Recipe", "Counter" };
-            Sprite[] icons = { _uChainsaw ? _uChainsaw : _sSaw, _uBackpack ? _uBackpack : _sBag, _uLightning ? _uLightning : _sSpeed, _uChef ? _uChef : _sPrice, _uTable ? _uTable : _sStar };
-            UpgradeKind[] ukinds = { UpgradeKind.Saw, UpgradeKind.Bag, UpgradeKind.Speed, UpgradeKind.Price, UpgradeKind.Counter };
-            int rowsN = names.Length;
-            const float awningScale = 2f;
-            float head = (_uPanelAwning ? _uPanelAwning.border.w : 118f) * awningScale;
-            var window = UIRect("Window", panelRoot, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 30f), new Vector2(1010f, head + 90f + rowsN * 196f + 60f));
-            Sliced(window, _uPanelAwning ? _uPanelAwning : _sPanel, awningScale, null, true);
-            var ribbon = UIRect("Title", window, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -head - 18f), new Vector2(560f, 120f));
-            Sliced(ribbon, _uRibbon ? _uRibbon : _sButton, 1.3f);
-            Label(Stretch("Text", ribbon, 60f, 60f, 22f, 34f), "UPGRADES", 60f, Color.white, TextAlignmentOptions.Center, true);
-
-            var rows = new UpgradeRow[rowsN];
-            var greyBtn = _uBtnGrey ? _uBtnGrey : _sButton;
-            for (int i = 0; i < rowsN; i++)
-            {
-                var row = UIRect("Row" + i, window, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -head - 92f - i * 196f), new Vector2(900f, 184f));
-                Sliced(row, _uCard ? _uCard : _sPanel, 1.5f);
-                var glow = UIRect("Glow", row, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(98f, 2f), new Vector2(190f, 190f));
-                Img(glow, _sGlow, new Color(1f, 0.9f, 0.55f, 0.7f));
-                var ic = UIRect("Icon", row, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(98f, 2f), new Vector2(140f, 140f));
-                Img(ic, icons[i], Color.white);
-                var nm = UIRect("Name", row, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(186f, 44f), new Vector2(300f, 64f));
-                Label(nm, names[i], 48f, UiInk, TextAlignmentOptions.MidlineLeft, false);
-                var lv = UIRect("Level", row, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(420f, 44f), new Vector2(150f, 56f));
-                var lvT = Label(lv, "LV 1", 34f, new Color(0.95f, 0.5f, 0.1f), TextAlignmentOptions.MidlineLeft, false);
-                var st = UIRect("Stat", row, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(186f, -8f), new Vector2(400f, 46f));
-                var stT = Label(st, "", 31f, new Color(0.45f, 0.36f, 0.3f), TextAlignmentOptions.MidlineLeft, false);
-                stT.richText = true;
-                var pips = new Image[Balance.MaxUpgradeLevel];
-                for (int p = 0; p < pips.Length; p++)
-                {
-                    var pip = UIRect("Pip" + p, row, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(204f + p * 44f, -58f), new Vector2(34f, 34f));
-                    pips[p] = Img(pip, _sCircle, Color.white);
-                }
-                var btn = UIRect("Buy", row, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-18f, 2f), new Vector2(280f, 132f));
-                var button = AtlasButton(btn, _uBtnGreen ? _uBtnGreen : _sButton, 2.2f);
-                button.transition = Selectable.Transition.SpriteSwap;
-                button.spriteState = new SpriteState { disabledSprite = greyBtn, pressedSprite = _uBtnGreen, highlightedSprite = _uBtnGreen, selectedSprite = _uBtnGreen };
-                var coin = UIRect("Coin", btn, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(54f, 6f), new Vector2(74f, 74f));
-                Img(coin, _uCoin ? _uCoin : _sCoin, Color.white);
-                var cost = Label(Stretch("Cost", btn, 92f, 16f, 0f, 18f), "$0", 52f, Color.white, TextAlignmentOptions.Center, true);
-
-                rows[i] = new UpgradeRow
-                {
-                    kind = ukinds[i], levelText = lvT, costText = cost, statText = stT, button = button, pips = pips
-                };
-            }
-
-            var closeUp = CloseHotspot(window, _uPanelAwning, "panel_awning", awningScale);
-            var up = panelRoot.gameObject.AddComponent<UpgradePanel>();
-            up.window = window;
-            up.rows = rows;
-            up.closeButton = closeUp;
-            up.pipOn = new Color(1f, 0.72f, 0.12f);
-            up.pipOff = new Color(0.84f, 0.76f, 0.66f);
+            BuildUpgradePanel(safe, world);
 
             // ---------------- flying coins
             var coinLayer = Stretch("Coins", root);
@@ -460,6 +415,13 @@ namespace JuiceKing.EditorTools
             settings.toggleOn = _uToggleOn;
             settings.toggleOff = _uToggleOff;
 
+            // ---------------- expansion: delivery card, world-complete popup, intro overlay
+            _uiDelivery = world >= 1 ? BuildDeliveryHUD(safe) : null;
+            _uiNextWorld = world == 0 ? BuildNextWorldButton(safe) : null;
+            _uiCompletion = world == 0 ? BuildCompletionPopup(root) : null;
+            if (world >= 1) BuildDeliveryPopup(root);
+            _uiIntro = world >= 1 ? BuildIntroOverlay(root) : null;
+
             // ---------------- simulated ad overlay (always on top)
             var adRoot = Stretch("AdOverlay", root);
             var adDim = Img(adRoot, _sWhite, new Color(0.02f, 0.02f, 0.04f, 0.94f), false, true);
@@ -486,6 +448,12 @@ namespace JuiceKing.EditorTools
             ad.countText = adCount;
             ad.titleText = adTitle;
             ad.closeButton = adCloseBtn;
+
+            // ---------------- world-change fade (above everything)
+            var fadeRt = Stretch("Fader", root);
+            var fadeImg = Img(fadeRt, _sWhite, new Color(0.04f, 0.03f, 0.06f, 1f), false, false);
+            fadeImg.preserveAspect = false;
+            fadeRt.gameObject.AddComponent<ScreenFader>().image = fadeImg;
         }
     }
 }

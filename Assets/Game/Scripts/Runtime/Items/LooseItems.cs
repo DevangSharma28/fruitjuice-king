@@ -15,8 +15,16 @@ namespace JuiceKing
 
         void Awake() => _i = this;
 
+        /// <summary>Lowest resting height: clears the plaza (0.02), soil beds (0.05-0.06) and pad decals (0.066).</summary>
+        const float GroundClear = 0.075f;
+        static int _dropLayer;
+
         public static void Drop(StackItem it, Vector3 landing, float delay = 0f)
         {
+            // Pieces often land overlapping each other: give each its own few millimetres of height so their flat faces
+            // never share a plane (that z-fights and flickers), and keep them clear of every ground surface.
+            _dropLayer = (_dropLayer + 1) % 8;
+            landing.y = Mathf.Max(landing.y, GroundClear) + _dropLayer * 0.006f;
             it.inTransit = true;
             it.onGround = false;
             it.transform.SetParent(null, true);

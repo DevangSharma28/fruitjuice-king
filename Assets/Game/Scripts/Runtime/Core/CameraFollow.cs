@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace JuiceKing
@@ -28,6 +30,22 @@ namespace JuiceKing
         float _shakeT, _shakeDur, _shakeAmp;
         float _punch;
 
+        class Shot
+        {
+            public Vector3 point;
+            public float dist, moveIn, hold, moveOut;
+            public Action onArrive, onDone;
+        }
+
+        readonly Queue<Shot> _shots = new Queue<Shot>();
+        Shot _shot;
+        int _phase;
+        float _pt;
+        Vector3 _from, _goal, _render;
+
+        /// <summary>True while a camera peek / cinematic shot is running (player input is blocked).</summary>
+        public static bool Busy => _i != null && (_i._shot != null || _i._shots.Count > 0);
+
         void Awake()
         {
             _i = this;
@@ -45,6 +63,7 @@ namespace JuiceKing
                 _cam.layerCullSpherical = true;
             }
             _base = target != null ? target.position + offset : transform.position;
+            _render = _base;
             if (target != null) _lastTarget = target.position;
             transform.SetPositionAndRotation(_base, Quaternion.LookRotation(-offset.normalized, Vector3.up));
         }
@@ -77,10 +96,105 @@ namespace JuiceKing
             if (_shakeT > 0f)
             {
                 _shakeT -= dt;
-                shake = Random.insideUnitSphere * (_shakeAmp * Mathf.Clamp01(_shakeT / _shakeDur));
+                shake = UnityEngine.Random.insideUnitSphere * (_shakeAmp * Mathf.Clamp01(_shakeT / _shakeDur));
             }
 
-            transform.SetPositionAndRotation(_base + shake, Quaternion.LookRotation(-offset.normalized, Vector3.up));
+            Vector3 pos = UpdateShot(_base);
+            _render = pos;
+            transform.SetPositionAndRotation(pos + shake, Quaternion.LookRotation(-offset.normalized, Vector3.up));
+        }
+
+        Vector3 UpdateShot(Vector3 follow)
+        {
+            if (_shot == null)
+            {
+                if (_shots.Count == 0) return follow;
+                StartShot(_shots.Dequeue(), _render == Vector3.zero ? follow : _render);
+            }
+            _pt += Time.unscaledDeltaTime;
+            switch (_phase)
+            {
+                case 0:
+                {
+                    float t = _shot.moveIn <= 0f ? 1f : Mathf.Clamp01(_pt / _shot.moveIn);
+                    if (t >= 1f)
+                    {
+                        _phase = 1;
+                        _pt = 0f;
+                        _shot.onArrive?.Invoke();
+                    }
+                    return Vector3.LerpUnclamped(_from, _goal, Ease.InOutQuad(t));
+                }
+                case 1:
+                    if (_pt >= _shot.hold)
+                    {
+                        var done = _shot.onDone;
+                        if (_shots.Count > 0) StartShot(_shots.Dequeue(), _goal);
+                        else
+                        {
+                            _phase = 2;
+                            _pt = 0f;
+                        }
+                        done?.Invoke();
+                    }
+                    return _goal;
+                default:
+                {
+                    float t = _shot.moveOut <= 0f ? 1f : Mathf.Clamp01(_pt / _shot.moveOut);
+                    if (t >= 1f)
+                    {
+                        _shot = null;
+                        return follow;
+                    }
+                    return Vector3.LerpUnclamped(_goal, follow, Ease.InOutQuad(t));
+                }
+            }
+        }
+
+        void StartShot(Shot s, Vector3 from)
+        {
+            _shot = s;
+            _phase = 0;
+            _pt = 0f;
+            _from = from;
+            _goal = s.point + offset * s.dist;
+        }
+
+        /// <summary>
+        /// Glide the camera to look at a world point, hold, then glide back to the player. Calls queue up and chain
+        /// without returning to the player in between (used by the world intro tour and unlock reveals).
+        /// </summary>
+        public static void Peek(Vector3 point, float hold = 1.2f, float distScale = 1f, Action onArrive = null, Action onDone = null,
+            float moveIn = 0.8f, float moveOut = 0.7f)
+        {
+            if (_i == null)
+            {
+                onArrive?.Invoke();
+                onDone?.Invoke();
+                return;
+            }
+            _i._shots.Enqueue(new Shot { point = point, dist = distScale, hold = hold, moveIn = moveIn, moveOut = moveOut, onArrive = onArrive, onDone = onDone });
+        }
+
+        /// <summary>Drops any queued shots and heads straight back to the player.</summary>
+        public static void CancelPeeks()
+        {
+            if (_i == null) return;
+            _i._shots.Clear();
+            if (_i._shot != null && _i._phase < 2)
+            {
+                _i._goal = _i._render;
+                _i._phase = 2;
+                _i._pt = 0f;
+            }
+        }
+
+        /// <summary>Snap the follow position to the player (after a scene load or teleport).</summary>
+        public static void SnapToTarget()
+        {
+            if (_i == null || _i.target == null) return;
+            _i._base = _i.target.position + _i.offset;
+            _i._lastTarget = _i.target.position;
         }
 
         public static void Shake(float amplitude, float duration)

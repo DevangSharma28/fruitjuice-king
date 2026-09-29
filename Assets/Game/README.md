@@ -2,9 +2,11 @@
 
 3D arcade-idle game in the style of *Chainsaw Juice King: Idle Shop*.
 
+Developers: see [`CLAUDE.md`](../../CLAUDE.md) in the project root for architecture, build workflow and rules for working on the code (with or without Claude Code).
+
 ## Play
 
-1. Open `Assets/Game/Scenes/JuiceKing.unity`.
+1. Open `Assets/Game/Scenes/Boot.unity` (build index 0). It shows the loading screen: the key art, the logo popping in, and a progress bar with a percentage and tips. It loads the world your save is in, then fades into the game.
 2. Set the Game view to a portrait resolution (for example 1080x1920).
 3. Press Play.
 
@@ -16,7 +18,8 @@
 **Debug keys** (Editor and development builds only)
 
 - `M` adds $500.
-- `F9` resets progress.
+- `F9` resets progress (back to the original farm).
+- `F10` opens the world-complete popup without finishing the world.
 - **Juice King ▸ Reset Save Data** clears the save from the menu.
 
 ## Core loop
@@ -68,6 +71,81 @@ Watching again while a boost is active adds time (capped at 10 minutes).
 
 Placement names are the `Ads.Placement*` constants.
 
+## Expansion 1: Tropical Farm
+
+**Unlocking it.** When every pad of the original farm is bought and every upgrade is maxed, a **JUICE KING!** popup appears. It shows lifetime stats: total earnings, juice produced, fruit harvested and customers served. It offers:
+- **ENTER TROPICAL FARM**
+- **Stay a bit longer**, which leaves a "NEW WORLD" button on the HUD.
+
+Entering does the following (`GameManager.BeginExpansion`):
+- archives a snapshot of the finished farm in the save (`world0Archive`, `world0Complete`);
+- resets per-world progress: money, unlocks, upgrades, tutorial and delivery;
+- keeps lifetime stats and settings;
+- fades to `Tropical.unity`.
+
+On the first visit a skippable fly-over (`ExpansionIntro`) shows "Welcome to the Tropical Juice Empire." and captions the groves, mixers, bay and hut. The tutorial then restarts with world-aware wording.
+
+**The island.** A rounded island with organic grass patches that feather into the sand, packed-sand walkways, turquoise shallows, shore foam and a scrolling ocean. It has four orchards, each with its own trees, harvest break and dressing:
+
+| Orchard | Plant | Harvest | Drink |
+|---|---|---|---|
+| Coconut Grove | leaning palms | coconuts drop and crack | coconut milk in a shell with an umbrella |
+| Mango Orchard | round-crowned trees | mangoes split | tall mango tumbler |
+| Banana Plantation | broad-leaf plants | bunches thump and scatter | banana shake with cream and a cherry |
+| Papaya Grove | slender trunks with fan leaves | papayas burst with seeds | papaya goblet |
+
+`TropicalFruitNode` shakes the tree on each chainsaw bite. The fruit tumbles from the tree and breaks open where it lands.
+
+**Living world.** Gulls over the sea, parrots over the jungle, butterflies, sailboats, a lagoon with a waterfall, tiki torches, beach umbrellas, loungers and surfboards, and the trucks on the causeway.
+
+**Delivery loop** (`Runtime/Delivery/`). Unlock the **Delivery Bay**. A truck then drives in over the causeway about every 90 s (`Economy.TruckInterval`) and parks by the loading pad.
+
+- **Trucks.** Van 8–14 cups, Juice Truck 16–24, Resort 26–40 (two flavours unlocked), Premium 30–45 at 1.8x reward (needs **Premium Contracts**).
+- **Clients.** Each order has a client such as Hotel Mango, Beach Bar or Tropical Cafe.
+- **Reward.** About 2x the shop value, before truck type and upgrades.
+- **Loading.** Stand on the pad with the ordered juice: cups arc into the side door, the cargo fills, and the board over the truck and the HUD card count up. When the order is full you get "DELIVERY COMPLETE!", fanfare, confetti, coins flying to the counter, the payout, and the truck drives off.
+- **Timeout.** After 3 minutes an unfinished truck leaves and pays shop price for what it got.
+- **HUD card.** Shows client, juice, x/y, reward and time left, or the countdown to the next truck. Tap it to glance at the bay.
+- **Helpers.** The **Loader** fills trucks automatically, the **Runner** serves the hut, and one farmer per orchard.
+- **Saving.** The current order is saved: a parked truck is still there after a restart.
+
+**Economy and upgrades** (`Core/Economy.cs`). Every system reads its numbers from `Economy`. World 0 keeps the classic `Balance` formulas. World 1 has its own scale: juice from $40 to $100, unlocks from $150 to $20,000, and a data-driven tree of 18 upgrades in 6 tabs (`Upgrades.ForWorld`):
+
+| Tab | Upgrades |
+|---|---|
+| FARM | Harvest Speed, Fruit Yield, Regrowth |
+| MIXER | Mixer Speed, Bonus Cup, Tray Size |
+| DELIVERY | Truck Reward, Big Orders, Truck Frequency, Premium Orders |
+| PLAYER | Backpack, Speed, Quick Hands |
+| WORKERS | Helper Speed, Helper Carry |
+| BUSINESS | Juice Price, Counter, Night Shift |
+
+Boosts carry over:
+- **2x CASH** pays 1.5x on deliveries.
+- **TURBO** speeds loading.
+- **FREE CASH** scales to the new economy.
+- **FINISH** works on the glowing unlock pads.
+
+**Unlock → reveal → discover.** Tropical pads are soft glowing rings with a radial progress bar. On purchase, the NEW! ribbon adds a discovery line ("Juicy mangoes, juicier profits"). For big unlocks the camera glides over to what appeared (`CameraFollow.Peek`, which also drives the intro).
+
+**Saves.** Old saves load unchanged. `saveVersion` 0 → 2 adds lifetime stats, estimated from cups sold. Unknown fields default safely, and the redirect in `GameManager.Awake` sends a Tropical save straight to its scene.
+
+## Loading screen
+
+`Boot.unity` / `Runtime/UI/LoadingScreen.cs`. The art comes from `Assets/Game/UI/Loading screen/`:
+- `starterBG.png` fills the portrait screen, cropping the sides, and drifts in slowly.
+- `GameLogo.png` pops in with a bounce, then breathes and bobs, with a shine sweeping across it.
+
+At the bottom are a rotating tip, "LOADING…" and a juice-orange bar with a percentage.
+
+The bar follows real work:
+1. synthesising the sound effects;
+2. loading the saved world in the background.
+
+It stays up for at least 2.6 s so the logo animation reads, and it stays on screen while the world's first frames run. It then fades out as the logo floats up. Entering a new world, or pressing F9, comes back through the same screen.
+
+To change the art, replace the two PNGs (keep the names) and run **Juice King ▸ Rebuild Boot (Loading) Scene**. The tips are listed in `JuiceKingBuilder.Boot.cs`.
+
 ## Feel and audio
 
 - **Particles** (`Core/Fx.cs`): juice droplets, lingering ground splats, shockwave rings, stars, hearts, leaves, coins, glints, bubbles, footstep dust and a turbo trail. They all come from 16 shared, looping particle systems (emission rate 0) that are emitted on demand.
@@ -101,37 +179,14 @@ To add a sprite:
 `UIKit.ContactSheet(path)` renders every cut sprite into a grid for review.
 
 ## Regenerating content
-## Platforms and performance
-
-The mobile build (Android and iOS, portrait) comes first. Web portals (itch.io, CrazyGames, Poki) come later from the same code.
-
-- **Render settings.** `Mobile_RPAsset` is used on Android, iOS and WebGL: HDR off, MSAA 2x, render scale 0.9, 1024 shadow map, 32 m shadow distance, no additional lights. `PC_RPAsset` is the editor/desktop profile. `ConfigureProject()` sets both on every full build.
-- **Player settings.** IL2CPP, ARM64 on Android, incremental GC, low managed stripping, portrait lock, and the screen never sleeps. **Set your own bundle identifier** (Player Settings ▸ Other) before a store build.
-- **Draw calls.** Juicers, counter and bin are merged into one mesh per material at build time (`JuiceKingBuilder.Optimize.cs`). Beds, trees, bushes, rocks and grass are static-batched. Only flowers, reeds, lily pads and bunting sway. Decor sits on layers 8 and 9 with camera cull distances of 70 m and 44 m. Small props cast no shadows. In the editor this took the scene from ~1,600 to ~750 effective draws, with about 65 SetPass calls.
-- **UI.** All sprites are packed into `Generated/UIAtlas.spriteatlasv2`. HUD elements sit under a `SafeArea` root, which keeps them clear of notches and home bars.
-- **GC.** Tweens are pooled per type, and customers, items and floating text come from `Pool`.
-- **Web later.** `Core/Platform.cs` already reports `GameplayStart`/`GameplayStop` (popups, ads, settings) and `LoadingFinished`. A Poki or CrazyGames SDK bridge only needs to subscribe to those events and implement `IRewardedAdProvider`. The layout is portrait: desktop web will need a landscape HUD pass, and `CameraFollow` already widens the FOV for landscape.
-
-## UI art pipeline
-
-The UI uses the art in `Assets/Game/UI/Atlas1-3.png` plus a few hi-res pieces from the *2D Mobile Game UI Kit*. `Scripts/Editor/Gen/UIKit.cs` lists each sprite by a seed point (the pixel coordinate of the item in the atlas). `UIAtlasCutter` flood-fills the item by alpha and writes it to `Generated/UI/<name>.png` as a sprite, with 9-slice borders where needed. Buttons with baked text ("Play", "Start"...) are rebuilt as **blank** 9-slice buttons by repeating a text-free column, so they can hold any label.
-
-To add a sprite:
-
-1. Add a `P(atlas, "name", x, y)` line in `UIKit.Define()`.
-2. Run **Build Everything**.
-3. Use it with `UIKit.Get("name")` in the builder.
-
-`UIKit.ContactSheet(path)` renders every cut sprite into a grid for review.
-
-## Regenerating content
 
 The scene, prefabs, materials, meshes, textures and animator are all generated from code. After you change the builder code, use one of these menu items:
 
 - **Juice King ▸ Build Everything** regenerates art, reconfigures the model imports, and rebuilds prefabs and the scene.
-- **Juice King ▸ Rebuild Scene (skip art + import)** skips the art and import steps, so it is faster.
+- **Juice King ▸ Rebuild Scene (skip art + import)** skips the art and import steps, so it is faster. It rebuilds both worlds.
+- **Juice King ▸ Rebuild Tropical Scene** rebuilds only the island.
 
-Hand edits to the generated scene are overwritten on rebuild. Put layout changes in `Scripts/Editor/Builder/JuiceKingBuilder.Scene.cs`.
+Hand edits to the generated scenes are overwritten on rebuild. Put layout changes in `Scripts/Editor/Builder/JuiceKingBuilder.Scene.cs` (original farm) or `JuiceKingBuilder.Tropical.cs` (island). Merged meshes are written per scene to `Generated/Meshes/Combined/<Scene>/`, so rebuilding one world never breaks the other.
 
 ## Code map
 
@@ -144,8 +199,11 @@ Hand edits to the generated scene are overwritten on rebuild. Put layout changes
 | `Scripts/Runtime/Zones` | Floor pads: Drop, Pickup, Cash, Upgrade, Unlock, Trash, plus UnlockManager |
 | `Scripts/Runtime/Actors` | Player, Chainsaw, Customer + CustomerManager (queue/payment), WorkerAI (farmer/waiter on NavMesh), CharacterAnim |
 | `Scripts/Runtime/UI` | HUD (money, shop progress, flying coins), BoostBar, OfferPopup, AdOverlay, UnlockBanner, UpgradePanel, InputJoystick, Tutorial, OrderBubble, FloatingText, UIPress, UISpin |
-| `Scripts/Runtime/Decor` | Ambient (wind, spinners, clouds, water), Wanderer (animals), Butterflies |
-| `Scripts/Editor` | Builder: procedural textures and icons (`ArtGen`), meshes, materials, Kenney import, scene (`JuiceKingBuilder.Scene.cs`), environment dressing (`JuiceKingBuilder.Env.cs`) and UI construction |
+| `Scripts/Runtime/Core/Economy.cs` | World-aware numbers (`Economy`), `UpgradeDef` and the per-world upgrade trees (`Upgrades`) |
+| `Scripts/Runtime/Delivery` | DeliveryManager (schedule, orders, payout, save), DeliveryOrder (truck types, clients, rewards), DeliveryTruck (drive, park, door, cargo fill), DeliveryBay, DeliveryZone (loading pad), TruckBoard, DeliveryHUD |
+| `Scripts/Runtime/Expansion` | ExpansionManager (world-complete check, scene switch), CompletionPopup, ExpansionIntro, ScreenFader |
+| `Scripts/Runtime/Decor` | Ambient (wind, spinners, clouds, water), Wanderer (animals), Butterflies, Birds, PathMover (boats) |
+| `Scripts/Editor` | Builder: procedural textures and icons (`ArtGen`, `ArtGen.Tropical`), meshes, materials, Kenney import, scenes (`JuiceKingBuilder.Scene.cs`, `JuiceKingBuilder.Tropical.cs`), tropical plants, trucks and props (`JuiceKingBuilder.TropicalProps.cs`), environment dressing (`JuiceKingBuilder.Env.cs`) and UI construction (`JuiceKingBuilder.UI.cs`, `JuiceKingBuilder.UIExpansion.cs`) |
 
 ## Credits
 

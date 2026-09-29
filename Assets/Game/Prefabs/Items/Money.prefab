@@ -135,6 +135,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7bcf2c23c69e2422abdc233a6a9b00aa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::JuiceKing.StackItem
-  type: 6
+  type: 40
   height: 0.07
   value: 5

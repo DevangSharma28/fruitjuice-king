@@ -10,6 +10,8 @@ namespace JuiceKing
     {
         public static Vector2 Direction { get; private set; }
         public static bool IsTouching { get; private set; }
+        /// <summary>Set by popups / cinematics that freeze the player. Camera peeks also block input.</summary>
+        public static bool Blocked;
 
         public RectTransform area;
         public RectTransform baseRect;
@@ -26,6 +28,17 @@ namespace JuiceKing
         void Update()
         {
             Vector2 dir = Vector2.zero;
+            if (Blocked || CameraFollow.Busy)
+            {
+                if (_active)
+                {
+                    _active = false;
+                    SetVisible(false);
+                }
+                IsTouching = false;
+                Direction = Vector2.zero;
+                return;
+            }
 
             bool pressed = false, pressedThisFrame = false;
             Vector2 pos = default;

@@ -106,7 +106,8 @@ namespace JuiceKing.EditorTools
 
             // Little signpost so it reads as "the bin".
             var sign = B.Node("Sign", t, new Vector3(0.1f, 0f, 0.85f));
-            B.Cyl("Post", sign.transform, _mDark, new Vector3(0f, 0.8f, 0f), 0.07f, 1.6f);
+            // The post stops under the board: the board is a camera-facing billboard, so a post through it shows in front.
+            B.Cyl("Post", sign.transform, _mDark, new Vector3(0f, 0.62f, 0f), 0.07f, 1.24f);
             var board = B.Node("Board", sign.transform, new Vector3(0f, 1.55f, 0f));
             board.AddComponent<Billboard>();
             var bg = B.Sprite("Bg", board.transform, _sRound, Vector3.zero, 1f, false, 3, new Color(0.22f, 0.52f, 0.33f, 0.95f));

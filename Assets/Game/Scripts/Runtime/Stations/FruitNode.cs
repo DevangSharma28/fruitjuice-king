@@ -23,14 +23,16 @@ namespace JuiceKing
         public float Hp01 => _hp / _maxHp;
 
         float _hp, _maxHp, _regrow, _lastHit;
-        Vector3 _baseScale;
-        Quaternion _baseRot;
+        protected Vector3 _baseScale;
+        protected Vector3 _basePos;
+        protected Quaternion _baseRot;
         float _wobble;
         float _idlePhase;
 
-        void Awake()
+        protected virtual void Awake()
         {
             _baseScale = visual.localScale;
+            _basePos = visual.localPosition;
             _baseRot = visual.localRotation;
             _maxHp = Balance.FruitHp[(int)kind];
             _hp = _maxHp;
@@ -83,6 +85,7 @@ namespace JuiceKing
             // Squash a little on every hit.
             float s = 0.92f + 0.08f * Mathf.Clamp01(_hp / _maxHp);
             Tweener.Punch(visual, 0.07f, 0.15f, _baseScale * s);
+            OnHit(player);
 
             if (hpBar != null)
             {
@@ -99,13 +102,22 @@ namespace JuiceKing
         void Break(Carrier by)
         {
             state = State.Empty;
-            _regrow = Balance.RegrowDelay[(int)kind];
+            _regrow = Economy.RegrowDelay(kind);
+            if (GameManager.I != null) GameManager.I.NotifyFruitHarvested();
             if (hpBar != null) hpBar.gameObject.SetActive(false);
             if (blocker != null) blocker.enabled = false;
 
+            OnBreak(by != null && by.isPlayer);
+        }
+
+        /// <summary>Extra feedback per chainsaw hit (tree shake, falling leaves...).</summary>
+        protected virtual void OnHit(bool player) { }
+
+        /// <summary>Default harvest: the giant fruit bursts where it grows and scatters its pieces.</summary>
+        protected virtual void OnBreak(bool loud)
+        {
             Vector3 center = transform.position + Vector3.up * (radius * 0.8f);
             var col = Balance.JuiceColors[(int)kind];
-            bool loud = by != null && by.isPlayer;
             Fx.JuiceBurst(center, transform.position, col, loud ? 1f : 0.6f);
             Fx.Chips(center, Balance.FruitColors[(int)kind], 8);
             Fx.Leaves(center + Vector3.up * 0.3f, loud ? 5 : 2);
@@ -117,26 +129,32 @@ namespace JuiceKing
             Sfx.Play(SfxId.Splat, loud ? 0.75f : 0.18f, Random.Range(0.92f, 1.08f));
 
             Tweener.Scale(visual, _baseScale * 1.18f, Vector3.zero, 0.16f, Ease.InQuad, () => visual.gameObject.SetActive(false));
+            SpawnPieces(center, transform.position, radius + 0.2f, radius + 0.9f);
+        }
 
-            int n = Balance.SlicesPerFruit[(int)kind];
+        /// <summary>Scatter this fruit's harvest pieces from <paramref name="from"/> onto the ground around <paramref name="around"/>.</summary>
+        protected void SpawnPieces(Vector3 from, Vector3 around, float minDist, float maxDist)
+        {
+            int n = Economy.SlicesPerFruit(kind);
             var refs = GameRefs.I;
             for (int i = 0; i < n; i++)
             {
-                var it = refs.SpawnItem(ItemTypes.Slice(kind), center, Quaternion.identity);
+                var it = refs.SpawnItem(ItemTypes.Slice(kind), from, Quaternion.identity);
                 float ang = (i / (float)n) * Mathf.PI * 2f + Random.Range(-0.4f, 0.4f);
-                float dist = Random.Range(radius + 0.2f, radius + 0.9f);
-                Vector3 land = transform.position + new Vector3(Mathf.Cos(ang) * dist, 0.02f, Mathf.Sin(ang) * dist);
+                float dist = Random.Range(minDist, maxDist);
+                Vector3 land = new Vector3(around.x + Mathf.Cos(ang) * dist, 0.02f, around.z + Mathf.Sin(ang) * dist);
                 LooseItems.Drop(it, land, i * 0.03f);
             }
         }
 
-        void Grow()
+        protected virtual void Grow()
         {
             state = State.Growing;
             _hp = _maxHp;
             visual.gameObject.SetActive(true);
             visual.localRotation = _baseRot;
-            Fx.Leaves(transform.position + Vector3.up * 0.3f, 2);
+            visual.localPosition = _basePos;
+            Fx.Leaves(visual.position + Vector3.up * 0.3f, 2);
             Tweener.Scale(visual, Vector3.zero, _baseScale, 0.9f, Ease.OutElastic, () =>
             {
                 state = State.Ready;

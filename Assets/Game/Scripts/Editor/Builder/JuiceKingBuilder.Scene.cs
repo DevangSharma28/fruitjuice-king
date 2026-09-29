@@ -42,8 +42,11 @@ namespace JuiceKing.EditorTools
             BuildItemPrefabs();
             BuildCustomerPrefabs();
             BuildScene();
+            BuildTropicalScene();
+            BuildBootScene();
             ConfigureProject();
             AssetDatabase.SaveAssets();
+            EditorSceneManager.OpenScene(BootScenePath);
             Debug.Log("[JuiceKing] Build complete: " + ScenePath);
         }
 
@@ -58,8 +61,44 @@ namespace JuiceKing.EditorTools
             BuildItemPrefabs();
             BuildCustomerPrefabs();
             BuildScene();
+            BuildTropicalScene();
+            BuildBootScene();
+            SetBuildScenes();
             AssetDatabase.SaveAssets();
+            EditorSceneManager.OpenScene(BootScenePath);
             Debug.Log("[JuiceKing] Scene rebuilt: " + ScenePath);
+        }
+
+        [MenuItem("Juice King/Rebuild Tropical Scene", priority = 2)]
+        public static void RebuildTropicalOnly()
+        {
+            _controller = KenneyImport.BuildController();
+            KenneyImport.TintNature();
+            BuildFont();
+            BuildMeshes();
+            BuildMaterials();
+            BuildItemPrefabs();
+            BuildCustomerPrefabs();
+            BuildTropicalScene();
+            SetBuildScenes();
+            AssetDatabase.SaveAssets();
+            Debug.Log("[JuiceKing] Tropical rebuilt: " + TropicalScenePath);
+        }
+
+        public static string RunTropicalOnly()
+        {
+            RebuildTropicalOnly();
+            return "ok";
+        }
+
+        /// <summary>Build order: the Boot loading screen first, then the worlds (loaded by name).</summary>
+        static void SetBuildScenes()
+        {
+            var list = new System.Collections.Generic.List<EditorBuildSettingsScene>();
+            if (System.IO.File.Exists(BootScenePath)) list.Add(new EditorBuildSettingsScene(BootScenePath, true));
+            list.Add(new EditorBuildSettingsScene(ScenePath, true));
+            list.Add(new EditorBuildSettingsScene(TropicalScenePath, true));
+            EditorBuildSettings.scenes = list.ToArray();
         }
 
         [MenuItem("Juice King/Reset Save Data", priority = 20)]
@@ -113,6 +152,7 @@ namespace JuiceKing.EditorTools
             _actors = B.Node("Actors", null, Vector3.zero).transform;
 
             var gm = systems.AddComponent<GameManager>();
+            gm.sceneExpansion = 0;
             var refs = systems.AddComponent<GameRefs>();
             systems.AddComponent<LooseItems>();
             systems.AddComponent<Boosts>();
@@ -156,7 +196,7 @@ namespace JuiceKing.EditorTools
             var patio = BuildPatio(new Vector3(-7.6f, 0f, -10.2f));
 
             // ---------------- customers
-            var cm = BuildCustomers(systems.transform, counter, cash);
+            var cm = BuildCustomers(systems.transform, counter, cash, Vector3.zero);
             _trash = BuildTrashBin(new Vector3(-9.8f, 0f, -1.2f), new Vector3(-8.0f, 0f, -1.2f));
 
             // ---------------- player & helpers
@@ -199,13 +239,18 @@ namespace JuiceKing.EditorTools
 
             // ---------------- camera, ui, guide
             var cam = BuildCamera(player.transform);
-            BuildUI(systems.transform, out var hud);
+            BuildUI(systems.transform, out var hud, 0);
+            var em = systems.AddComponent<ExpansionManager>();
+            em.nextExpansion = 1;
+            em.completionPopup = _uiCompletion;
+            em.nextWorldButton = _uiNextWorld;
 
             var tut = systems.AddComponent<Tutorial>();
             tut.firstField = orangeField;
             tut.firstJuicer = orangeJuicer;
             tut.counter = counter;
             tut.cash = cash;
+            tut.upgradeZone = upgradeStation.GetComponentInChildren<UpgradeZone>(true);
             var arrowMat = Emissive("GuideGlow", new Color(1f, 0.82f, 0.1f), 1.5f);
             var outlineMat = MatLib.Lit("GuideOutline", new Color(0.3f, 0.16f, 0.04f), 0f);
             outlineMat.SetFloat("_Cull", 1f); // front-face culled shell = cartoon outline
@@ -225,6 +270,8 @@ namespace JuiceKing.EditorTools
             refs.moneyPrefab = _moneyPrefab;
             refs.fruitIcons = _sFruit;
             refs.juiceIcon = _sJuice;
+            refs.juiceIcons = (Sprite[])_sJuiceIcons.Clone();
+            UpgradeIconTable(out refs.upgradeIconKeys, out refs.upgradeIconSprites);
             refs.moneyIcon = _sMoney;
             refs.particleMaterial = _mParticle;
             refs.fxMaterials = _mFx;
@@ -245,7 +292,7 @@ namespace JuiceKing.EditorTools
             BuildButterflies();
             BuildClouds();
             BuildGroundCover();
-            OptimizeScene();
+            OptimizeScene("JuiceKing");
             // Static-batch the scenery; animated decor (swayers, spinners, critters) is un-flagged below.
             MarkStatic(_decor.gameObject);
             foreach (var n in new[] { "Trees", "Plants", "GroundCover" })
@@ -285,7 +332,7 @@ namespace JuiceKing.EditorTools
             EditorSceneManager.MarkSceneDirty(scene);
             System.IO.Directory.CreateDirectory("Assets/Game/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            SetBuildScenes();
         }
 
         static void MarkStatic(GameObject go)
@@ -308,13 +355,13 @@ namespace JuiceKing.EditorTools
 
         // ================================================================== lighting, ground, camera
 
-        static void BuildLighting()
+        static void BuildLighting(bool tropical = false)
         {
             var sun = new GameObject("Sun");
             var l = sun.AddComponent<Light>();
             l.type = LightType.Directional;
-            l.color = new Color(1f, 0.93f, 0.8f);
-            l.intensity = 1.3f;
+            l.color = tropical ? new Color(1f, 0.91f, 0.76f) : new Color(1f, 0.93f, 0.8f);
+            l.intensity = tropical ? 1.4f : 1.3f;
             l.shadows = LightShadows.Soft;
             l.shadowStrength = 0.5f;
             sun.transform.rotation = Quaternion.Euler(48f, -32f, 0f);
@@ -326,9 +373,15 @@ namespace JuiceKing.EditorTools
             RenderSettings.skybox = null;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.7f, 0.87f, 0.98f);
-            RenderSettings.fogStartDistance = 40f;
-            RenderSettings.fogEndDistance = 78f;
+            RenderSettings.fogColor = tropical ? new Color(0.62f, 0.86f, 0.96f) : new Color(0.7f, 0.87f, 0.98f);
+            RenderSettings.fogStartDistance = tropical ? 48f : 40f;
+            RenderSettings.fogEndDistance = tropical ? 105f : 78f;
+            if (tropical)
+            {
+                RenderSettings.ambientSkyColor = new Color(0.78f, 0.9f, 1f);
+                RenderSettings.ambientEquatorColor = new Color(0.78f, 0.8f, 0.68f);
+                RenderSettings.ambientGroundColor = new Color(0.62f, 0.55f, 0.42f);
+            }
             RenderSettings.sun = l;
 
             // Post processing.
@@ -338,9 +391,9 @@ namespace JuiceKing.EditorTools
             var ca = profile.Add<ColorAdjustments>(true);
             ca.postExposure.Override(0.18f);
             ca.contrast.Override(8f);
-            ca.saturation.Override(20f);
+            ca.saturation.Override(tropical ? 26f : 20f);
             var wb = profile.Add<WhiteBalance>(true);
-            wb.temperature.Override(6f);
+            wb.temperature.Override(tropical ? 9f : 6f);
             var bloom = profile.Add<Bloom>(true);
             bloom.threshold.Override(0.95f);
             bloom.intensity.Override(0.45f);
@@ -348,7 +401,7 @@ namespace JuiceKing.EditorTools
             var vig = profile.Add<Vignette>(true);
             vig.intensity.Override(0.2f);
             vig.smoothness.Override(0.5f);
-            const string profilePath = "Assets/Game/Generated/PostFX.asset";
+            string profilePath = tropical ? "Assets/Game/Generated/PostFX_Tropical.asset" : "Assets/Game/Generated/PostFX.asset";
             AssetDatabase.DeleteAsset(profilePath);
             AssetDatabase.CreateAsset(profile, profilePath);
             foreach (var comp in profile.components) AssetDatabase.AddObjectToAsset(comp, profile);
@@ -393,16 +446,16 @@ namespace JuiceKing.EditorTools
             bc.size = size;
         }
 
-        static Camera BuildCamera(Transform target)
+        static Camera BuildCamera(Transform target, Color? background = null, float far = 120f)
         {
             var go = new GameObject("Main Camera");
             go.tag = "MainCamera";
             var cam = go.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.7f, 0.87f, 0.98f);
+            cam.backgroundColor = background ?? new Color(0.7f, 0.87f, 0.98f);
             cam.fieldOfView = 50f;
             cam.nearClipPlane = 0.3f;
-            cam.farClipPlane = 120f;
+            cam.farClipPlane = far;
             go.AddComponent<AudioListener>();
             var data = go.AddComponent<UniversalAdditionalCameraData>();
             data.renderPostProcessing = true;
@@ -579,7 +632,7 @@ namespace JuiceKing.EditorTools
 
         // ================================================================== customers & helpers
 
-        static CustomerManager BuildCustomers(Transform systems, Counter counter, CashPile cash)
+        static CustomerManager BuildCustomers(Transform systems, Counter counter, CashPile cash, Vector3 offset)
         {
             var root = B.Node("Customers", systems, Vector3.zero);
             var cm = root.AddComponent<CustomerManager>();
@@ -592,6 +645,9 @@ namespace JuiceKing.EditorTools
                 new Vector3(0f, 0f, -12.75f), new Vector3(-1.1f, 0f, -13.9f), new Vector3(-2.2f, 0f, -13.9f)
             };
             Vector3[] exit = { new Vector3(1.6f, 0f, -9.0f), new Vector3(2.4f, 0f, -14.4f), new Vector3(16f, 0f, -14.4f) };
+            for (int i = 0; i < entry.Length; i++) entry[i] += offset;
+            for (int i = 0; i < queue.Length; i++) queue[i] += offset;
+            for (int i = 0; i < exit.Length; i++) exit[i] += offset;
             cm.entryPath = Points(root.transform, "Entry", entry);
             cm.queueSlots = Points(root.transform, "Queue", queue);
             cm.exitPath = Points(root.transform, "Exit", exit);

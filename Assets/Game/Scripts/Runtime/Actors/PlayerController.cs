@@ -47,10 +47,9 @@ namespace JuiceKing
         void Update()
         {
             float dt = Time.deltaTime;
-            var d = GameManager.I.data;
-            carrier.capacity = Balance.BagCapacity(d.bagLevel);
-            saw.dps = Balance.SawDps(d.sawLevel) * Mathf.Lerp(1f, Boosts.WorkMult, 0.5f);
-            float maxSpeed = Balance.MoveSpeed(d.speedLevel) * Boosts.MoveMult;
+            carrier.capacity = Economy.BagCapacity;
+            saw.dps = Economy.SawDps * Mathf.Lerp(1f, Boosts.WorkMult, 0.5f);
+            float maxSpeed = Economy.MoveSpeed * Boosts.MoveMult;
 
             Vector2 inp = InputJoystick.Direction;
             Vector3 dir = new Vector3(inp.x, 0f, inp.y);

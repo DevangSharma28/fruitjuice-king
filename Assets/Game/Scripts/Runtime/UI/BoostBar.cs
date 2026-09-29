@@ -132,7 +132,7 @@ namespace JuiceKing
             }
         }
 
-        int FreeCashAmount() => Balance.FreeCash(GameManager.I.UnlockedCount);
+        int FreeCashAmount() => Economy.FreeCash(GameManager.I.UnlockedCount);
 
         void OnTap(BoostButton b)
         {

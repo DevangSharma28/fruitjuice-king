@@ -47,20 +47,66 @@ namespace JuiceKing.EditorTools
         {
             var go = B.Node(name, parent, Vector3.zero);
             go.transform.position = worldPos;
-            var pad = B.Node("Pad", go.transform, Vector3.zero, null, new Vector3(size.x, 1f, size.y));
-            // Raised slab (darker shade of the pad colour) gives the tile an edge and a shadow line on the plaza.
-            RB("Slab", pad.transform, SlabMat(mat), new Vector3(0f, 0.03f, 0f), new Vector3(1.03f, 0.06f, 1.03f), 0.16f, false);
-            var frame = B.Decal("Frame", pad.transform, mat, new Vector3(0f, 0.066f, 0f), Vector2.one);
+            // Pad pieces are built at their real size (no stretched parent), so the rounded corners and the dashed rim
+            // keep their shape on long pads.
+            var pad = B.Node("Pad", go.transform, Vector3.zero);
+            float m = Mathf.Min(size.x, size.y);
+            RB("Slab", pad.transform, SlabMat(mat), new Vector3(0f, 0.03f, 0f), new Vector3(size.x + 0.08f, 0.06f, size.y + 0.08f), 0.2f * m, false);
+            var frame = NineSliceDecal("Frame", pad.transform, mat, new Vector3(0f, 0.066f, 0f), size, 0.3f * m, 0.3f);
             frame.GetComponent<MeshRenderer>().sortingOrder = 0;
             if (icon != null)
             {
-                float s = SpriteScale(icon, Mathf.Min(size.x, size.y) * 0.5f);
+                float s = SpriteScale(icon, m * 0.5f);
                 B.Sprite("Icon", go.transform, icon, new Vector3(0f, 0.075f, 0f), s, true, 1, Color.white);
             }
             var z = go.AddComponent<T>();
             z.size = size;
             z.padVisual = pad.transform;
             return z;
+        }
+
+        static readonly Dictionary<string, Mesh> _nineSlice = new Dictionary<string, Mesh>();
+
+        /// <summary>
+        /// Flat decal (facing up) whose texture is 9-sliced: the outer <paramref name="uvBorder"/> of the texture maps to a
+        /// fixed <paramref name="corner"/> world size on every side, only the middle stretches.
+        /// </summary>
+        static GameObject NineSliceDecal(string name, Transform parent, Material mat, Vector3 pos, Vector2 size, float corner, float uvBorder)
+        {
+            string key = $"{size.x:0.00}_{size.y:0.00}_{corner:0.00}_{uvBorder:0.00}";
+            if (!_nineSlice.TryGetValue(key, out var mesh) || mesh == null)
+            {
+                float c = Mathf.Min(corner, Mathf.Min(size.x, size.y) * 0.5f);
+                float[] xs = { -size.x * 0.5f, -size.x * 0.5f + c, size.x * 0.5f - c, size.x * 0.5f };
+                float[] zs = { -size.y * 0.5f, -size.y * 0.5f + c, size.y * 0.5f - c, size.y * 0.5f };
+                float[] uvs = { 0f, uvBorder, 1f - uvBorder, 1f };
+                var v = new List<Vector3>();
+                var uv = new List<Vector2>();
+                for (int j = 0; j < 4; j++)
+                for (int i = 0; i < 4; i++)
+                {
+                    v.Add(new Vector3(xs[i], 0f, zs[j]));
+                    uv.Add(new Vector2(uvs[i], uvs[j]));
+                }
+                var tris = new List<int>();
+                for (int j = 0; j < 3; j++)
+                for (int i = 0; i < 3; i++)
+                {
+                    int a = j * 4 + i, b = a + 1, d = a + 4, e = d + 1;
+                    tris.AddRange(new[] { a, d, b, b, d, e });
+                }
+                mesh = new Mesh { name = "NineSlice_" + key };
+                mesh.SetVertices(v);
+                mesh.SetUVs(0, uv);
+                mesh.SetTriangles(tris, 0);
+                mesh.RecalculateNormals();
+                mesh.RecalculateBounds();
+                mesh = SaveMesh(mesh, "NineSlice_" + key);
+                _nineSlice[key] = mesh;
+            }
+            var go = B.MeshObj(name, parent, mesh, mat, pos, Vector3.one, null, false);
+            go.GetComponent<MeshRenderer>().receiveShadows = false;
+            return go;
         }
 
         /// <summary>Tinted copy of the pad tile material.</summary>
@@ -127,7 +173,8 @@ namespace JuiceKing.EditorTools
 
             // Round fruit sign on a post so every machine reads at a glance.
             var sign = B.Node("Sign", t, new Vector3(0.72f, 0f, 0.5f)).transform;
-            B.Cyl("Post", sign, _mChrome, new Vector3(0f, 1.9f, 0f), 0.07f, 1.1f);
+            // Post sits just behind the round sign so it never pokes through its face.
+            B.Cyl("Post", sign, _mChrome, new Vector3(0f, 1.9f, 0.07f), 0.07f, 1.1f);
             var disc = B.MeshObj("Disc", sign, _disc, new[] { _mWhite, shell }, new Vector3(0f, 2.72f, 0f), new Vector3(0.78f, 0.07f, 0.78f), new Vector3(-90f, 0f, 0f));
             var sIcon = B.Sprite("Icon", sign, _sFruit[f], new Vector3(0f, 2.72f, -0.085f), SpriteScale(_sFruit[f], 0.56f), false, 2);
             sIcon.transform.localRotation = Quaternion.identity;
@@ -212,7 +259,7 @@ namespace JuiceKing.EditorTools
 
         // ================================================================== counter
 
-        static Counter BuildCounter(Vector3 pos)
+        static Counter BuildCounter(Vector3 pos, string brandText = "JUICE KING")
         {
             var root = B.Node("JuiceStand", _stations, pos);
             var t = root.transform;
@@ -225,7 +272,7 @@ namespace JuiceKing.EditorTools
 
             // Striped skirt facing the customers, with the brand.
             B.Box("Skirt", body, _mAwning, new Vector3(0f, 0.6f, -0.605f), new Vector3(4.2f, 0.6f, 0.04f));
-            var brand = B.Text("Brand", body, "JUICE KING", 4.4f, new Color(1f, 0.85f, 0.25f), new Vector3(0f, 0.6f, -0.635f));
+            var brand = B.Text("Brand", body, brandText, 4.4f, new Color(1f, 0.85f, 0.25f), new Vector3(0f, 0.6f, -0.635f));
             brand.rectTransform.sizeDelta = new Vector2(3.6f, 0.8f);
             B.Sprite("CrownL", body, _sCrown, new Vector3(-1.75f, 0.62f, -0.635f), SpriteScale(_sCrown, 0.34f), false, 6);
             B.Sprite("CrownR", body, _sCrown, new Vector3(1.75f, 0.62f, -0.635f), SpriteScale(_sCrown, 0.34f), false, 6);

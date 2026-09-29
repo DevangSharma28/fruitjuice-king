@@ -80,7 +80,7 @@ namespace JuiceKing
             var refs = GameRefs.I;
             var kinds = GameManager.I.OrderableKinds;
             FruitKind kind = kinds[Random.Range(0, kinds.Count)];
-            int max = Balance.MaxOrder(GameManager.I.data.totalSold);
+            int max = Economy.MaxOrder(GameManager.I.data.totalSold);
             int count = Random.Range(1, max + 1);
 
             // Avoid the same look twice in a row.

@@ -9,7 +9,7 @@ namespace JuiceKing
     public static class Fx
     {
         static ParticleSystem _splash, _chips, _confetti, _poof, _sparkle;
-        static ParticleSystem _drops, _splat, _ring, _stars, _hearts, _dust, _leaves, _coins, _glints, _trail, _bubbles;
+        static ParticleSystem _drops, _splat, _ring, _stars, _hearts, _dust, _leaves, _coins, _glints, _trail, _bubbles, _smoke;
 
         static readonly Color[] ConfettiColors =
         {
@@ -116,6 +116,11 @@ namespace JuiceKing
 
             // Bubbles rising from blending juice.
             _bubbles = Create(root, "Bubbles", Mat(FxShape.Ring), 0.4f, 0.7f, 0.4f, 1f, 0.05f, 0.11f, -0.4f, ParticleSystemShapeType.Cone);
+            // Truck exhaust: soft grey puffs that grow and drift up.
+            _smoke = Create(root, "Smoke", Mat(FxShape.Circle), 0.8f, 1.3f, 0.3f, 0.8f, 0.2f, 0.34f, -0.25f, ParticleSystemShapeType.Sphere);
+            SizeCurve(_smoke, new Keyframe(0f, 0.5f), new Keyframe(1f, 2.4f));
+            AlphaFade(_smoke, 0.05f);
+
             var bshape = _bubbles.shape;
             bshape.angle = 12f;
             bshape.radius = 0.22f;
@@ -306,6 +311,12 @@ namespace JuiceKing
         {
             Ensure();
             Emit(_trail, pos, c, 1);
+        }
+
+        public static void Smoke(Vector3 pos, float darkness = 0.55f, int count = 1)
+        {
+            Ensure();
+            Emit(_smoke, pos, new Color(darkness, darkness, darkness, 0.55f), count);
         }
 
         public static void Bubbles(Vector3 pos, Color c, int count = 2)

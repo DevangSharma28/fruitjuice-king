@@ -6,7 +6,8 @@ namespace JuiceKing
     public enum SfxId
     {
         Pop, Chop, Splat, Coin, Cash, Unlock, Drop, Click, Pour, Error,
-        Tink, Trash, Lid, Whoosh, Step, Sparkle, Reward, Bubble, Count
+        Tink, Trash, Lid, Whoosh, Step, Sparkle, Reward, Bubble,
+        Crack, Slice, Leafy, Squish, Horn, Depart, Fanfare, BigCash, Load, Count
     }
 
     /// <summary>
@@ -19,7 +20,7 @@ namespace JuiceKing
 
         static Sfx _i;
         static AudioClip[] _clips;
-        static AudioClip _chainsaw, _juicerLoop, _ambient;
+        static AudioClip _chainsaw, _juicerLoop, _ambient, _engine;
         AudioSource[] _sources;
         AudioSource _ambientSource;
         int _next;
@@ -54,6 +55,15 @@ namespace JuiceKing
             }
         }
 
+        public static AudioClip EngineClip
+        {
+            get
+            {
+                Ensure();
+                return _engine;
+            }
+        }
+
         public static AudioClip JuicerClip
         {
             get
@@ -62,6 +72,9 @@ namespace JuiceKing
                 return _juicerLoop;
             }
         }
+
+        /// <summary>Synthesise every clip now (the loading screen calls this so the first seconds of play don't hitch).</summary>
+        public static void Warmup() => Ensure();
 
         static void Ensure()
         {
@@ -271,6 +284,104 @@ namespace JuiceKing
                 float am = 0.82f + 0.18f * Mathf.Sin(2f * Mathf.PI * 8f * t);
                 return (hum + Noise() * 0.06f) * am * 0.5f;
             }, 0.25f);
+
+            // Coconut: hard woody crack, then a sloshy splash of milk.
+            _clips[(int)SfxId.Crack] = Make("crack", 0.36f, (t, d) =>
+            {
+                float knock = Sin(Mathf.Lerp(420f, 260f, t / 0.05f) * t) * Env(t, 0.0008f, 0.03f);
+                float snap = Crackle(0.5f) * Env(t, 0.0005f, 0.02f);
+                float slosh = Noise() * Env(t - 0.05f, 0.01f, 0.14f) * 0.4f;
+                float blip = t > 0.07f && t < 0.1f ? Sin((500f + (t - 0.07f) * 12000f) * (t - 0.07f)) * Env(t - 0.07f, 0.002f, 0.01f) : 0f;
+                return knock * 0.7f + snap * 0.5f + slosh + blip * 0.3f;
+            }, 0.4f);
+
+            // Mango: clean soft slice + juicy squelch.
+            _clips[(int)SfxId.Slice] = Make("slice", 0.3f, (t, d) =>
+            {
+                float swish = Noise() * Env(t, 0.004f, 0.04f) * 0.4f;
+                float squelch = Noise() * Env(t - 0.03f, 0.005f, 0.12f) * 0.45f;
+                float body = Sin(Mathf.Lerp(180f, 80f, t / d) * t) * Env(t - 0.03f, 0.003f, 0.1f);
+                return swish + squelch + body * 0.5f;
+            }, 0.22f);
+
+            // Banana bunch: leafy thump.
+            _clips[(int)SfxId.Leafy] = Make("leafy", 0.34f, (t, d) =>
+            {
+                float thump = Sin(Mathf.Lerp(130f, 60f, t / d) * t) * Env(t, 0.002f, 0.07f);
+                float rustle = Crackle(0.3f) * Env(t, 0.01f, 0.16f);
+                return thump * 0.7f + rustle * 0.35f;
+            }, 0.3f);
+
+            // Papaya: big soft squish with wet blips.
+            _clips[(int)SfxId.Squish] = Make("squish", 0.45f, (t, d) =>
+            {
+                float n = Noise() * Env(t, 0.006f, 0.2f);
+                float body = Sin(Mathf.Lerp(120f, 45f, t / d) * t) * Env(t, 0.004f, 0.18f);
+                float wet = 0f;
+                for (int i = 0; i < 4; i++)
+                {
+                    float lt = t - (0.03f + i * 0.05f);
+                    if (lt > 0f && lt < 0.03f) wet += Sin((600f + i * 150f + lt * 20000f) * lt) * Env(lt, 0.001f, 0.012f);
+                }
+                return n * 0.4f + body * 0.6f + wet * 0.3f;
+            }, 0.16f);
+
+            // Friendly two-tone truck horn.
+            _clips[(int)SfxId.Horn] = Make("horn", 0.55f, (t, d) =>
+            {
+                float env = t < 0.24f ? Env(t, 0.01f, 1f) * Mathf.Clamp01((0.24f - t) * 40f)
+                    : Env(t - 0.28f, 0.01f, 1f) * Mathf.Clamp01((0.54f - t) * 40f);
+                float f = t < 0.26f ? 392f : 330f;
+                return (Saw(f * t) * 0.35f + Saw(f * 1.5f * t) * 0.2f) * env * 0.5f;
+            }, 0.25f);
+
+            // Engine rev and pull-away.
+            _clips[(int)SfxId.Depart] = Make("depart", 1.1f, (t, d) =>
+            {
+                float k = t / d;
+                float f = Mathf.Lerp(45f, 90f, Mathf.Sqrt(k));
+                float env = Mathf.Sin(k * Mathf.PI) * 0.9f + 0.1f;
+                return (Saw(f * t) * 0.4f + Saw(f * 2f * t) * 0.2f + Noise() * 0.1f) * env * 0.4f;
+            }, 0.15f);
+
+            // Delivery complete: brass-ish fanfare + glitter.
+            float[] fanNotes = { 523.25f, 659.25f, 783.99f, 1046.5f };
+            _clips[(int)SfxId.Fanfare] = Make("fanfare", 1.3f, (t, d) =>
+            {
+                float s = 0f;
+                for (int i = 0; i < 4; i++)
+                {
+                    float lt = t - i * 0.12f;
+                    if (lt < 0f) continue;
+                    float len = i == 3 ? 0.9f : 0.2f;
+                    float env = Env(lt, 0.01f, len);
+                    s += (Saw(fanNotes[i] * lt) * 0.3f + Sin(fanNotes[i] * lt)) * env;
+                }
+                return s * 0.18f + Glitter(t - 0.36f, 0.6f) * 0.15f;
+            }, 0.35f);
+
+            // Big cash: cascade of coin clinks.
+            _clips[(int)SfxId.BigCash] = Make("bigcash", 0.9f, (t, d) =>
+            {
+                float s = 0f;
+                for (int i = 0; i < 10; i++)
+                {
+                    float st = i * 0.07f + (i % 3) * 0.013f;
+                    s += Clink(t - st, 2100f + (i * 137 % 7) * 180f) * (1f - i * 0.05f);
+                }
+                return s * 0.22f;
+            });
+
+            // Crate thunk while loading the truck.
+            _clips[(int)SfxId.Load] = Make("load", 0.14f, (t, d) =>
+                Sin(Mathf.Lerp(240f, 150f, t / d) * t) * Env(t, 0.001f, 0.045f) * 0.6f + Noise() * Env(t, 0.0005f, 0.008f) * 0.25f, 0.5f);
+
+            // Idle diesel loop: 0.5 s, whole cycles of 40/80/120 Hz and a 10 Hz chug.
+            _engine = Make("engine", 0.5f, (t, d) =>
+            {
+                float chug = 0.7f + 0.3f * Mathf.Sin(2f * Mathf.PI * 10f * t);
+                return (Saw(40f * t) * 0.45f + Saw(80f * t + 0.2f) * 0.25f + Sin(120f * t) * 0.15f + Noise() * 0.05f) * chug * 0.45f;
+            }, 0.12f);
 
             _ambient = MakeAmbient(8f);
         }
