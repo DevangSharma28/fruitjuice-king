@@ -86,6 +86,7 @@ namespace JuiceKing
 
             IsTouching = _active;
             Direction = Vector2.ClampMagnitude(dir, 1f);
+            if (dir != Vector2.zero) Platform.NotifyFirstInput();
         }
 
         void ScreenToArea(Vector2 screen, out Vector2 local)

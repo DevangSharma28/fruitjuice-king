@@ -19,6 +19,8 @@ namespace JuiceKing
         public Sprite juiceIcon;
         public Sprite moneyIcon;
         public Material particleMaterial;
+        [Tooltip("Particle materials indexed by FxShape.")]
+        public Material[] fxMaterials;
         public TMP_FontAsset font;
         public FloatingText floatingTextPrefab;
         public GameObject[] customerPrefabs;

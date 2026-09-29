@@ -24,6 +24,16 @@ namespace JuiceKing.EditorTools
         static Material _mPadSolid, _mPadDashed, _mPadFill, _mPointer, _mParticle, _mBlob, _mWhiteSprite;
         static Material _mGrass, _mTiles, _mSoil, _mRoad, _mSidewalk, _mAwning, _mChain, _mOrangeBody;
         static Sprite _sRound, _sButton, _sCircle, _sRing, _sWhite, _sMoney, _sJuice, _sSaw, _sBag, _sSpeed, _sWorker, _sStar, _sHeart, _sSoundOn, _sSoundOff;
+        static Sprite _sCoin, _sCash2x, _sTurbo, _sMoneyBag, _sTrash, _sAd, _sPlay, _sCrown, _sPrice;
+        static Sprite _sPanel, _sPill, _sCircleBtn, _sRingThick, _sShine, _sRays, _sGlow, _sSneaker;
+        // Sprites cut from the UI atlases (see UIKit).
+        static Sprite _uCoin, _uCoins, _uMoneyBag, _uLightning, _uCrown, _uStar, _uChef, _uFarmer, _uWaiter, _uBackpack, _uChainsaw,
+            _uMachine, _uTable, _uTools, _uRecycle, _uLock, _uGift, _uHeartBubble, _uExclBubble, _uX, _uCheck,
+            _uBtnGreen, _uBtnYellow, _uBtnBlue, _uBtnOrange, _uBtnRed, _uBtnGrey, _uWatchAd, _uGear, _uRibbon, _uPlank, _uNote, _uCard,
+            _uPanelAwning, _uPanelPlain, _uToggleOn, _uToggleOff, _uHeroCoins, _uHeroMoneyBag, _uHeroCoinBox, _uArrowUp,
+            _uRocket, _uWarning, _uBtnCream, _uBadgeAd, _uSqWood, _uSqBlue, _uSqGreen, _uSqOrange, _uRibbonYellow, _uBubbleWhite, _uPanelGold;
+        static Material[] _mFx = new Material[(int)FxShape.Count];
+        static Material _mWater, _mPath, _mCloud, _mHedge, _mBinGreen, _mBinDark, _mAnimal, _mDuckBody, _mDuckBeak, _mLily, _mStone, _mHay, _mRoof, _mWhiteWall, _mPink, _mBlue, _mButterfly;
         static Sprite[] _sFruit = new Sprite[3];
         static RuntimeAnimatorController _controller;
 
@@ -164,10 +174,10 @@ namespace JuiceKing.EditorTools
             _mAwning = MatLib.Lit("Awning", Color.white, 0.1f, MatLib.Tex("awning.png"), new Vector2(3f, 1f));
 
             _mGrass = MatLib.Lit("Ground_Grass", Color.white, 0.05f, MatLib.Tex("ground_grass.png"), new Vector2(14f, 14f));
-            _mTiles = MatLib.Lit("Ground_Tiles", Color.white, 0.12f, MatLib.Tex("ground_tiles.png"), new Vector2(10f, 8f));
+            _mTiles = MatLib.Lit("Ground_Tiles", Color.white, 0.12f, MatLib.Tex("ground_tiles.png"), new Vector2(6f, 4.1f));
             _mSoil = MatLib.Lit("Ground_Soil", Color.white, 0.02f, MatLib.Tex("ground_soil.png"), new Vector2(2f, 2f));
             _mRoad = MatLib.Lit("Ground_Road", Color.white, 0.1f, MatLib.Tex("ground_road.png"), new Vector2(30f, 2f));
-            _mSidewalk = MatLib.Lit("Ground_Sidewalk", new Color(0.85f, 0.85f, 0.83f), 0.1f, MatLib.Tex("ground_tiles.png"), new Vector2(40f, 1f));
+            _mSidewalk = MatLib.Lit("Ground_Sidewalk", new Color(0.86f, 0.86f, 0.86f), 0.1f, MatLib.Tex("ground_tiles.png"), new Vector2(30f, 0.8f));
 
             string[] sliceTex = { "slice_orange.png", "slice_watermelon.png", "slice_pineapple.png" };
             for (int i = 0; i < 3; i++)
@@ -181,7 +191,7 @@ namespace JuiceKing.EditorTools
             _mPadSolid = MatLib.Sprite("Pad_Solid", MatLib.Tex("pad_solid.png"), Color.white);
             _mPadDashed = MatLib.Sprite("Pad_Dashed", MatLib.Tex("pad_dashed.png"), Color.white);
             _mPadFill = MatLib.Sprite("Pad_Fill", Texture2D.whiteTexture, new Color(0.35f, 0.95f, 0.45f, 0.55f));
-            _mPointer = MatLib.Sprite("Pointer", MatLib.Tex("pointer.png"), new Color(1f, 1f, 1f, 0.9f));
+            _mPointer = MatLib.Sprite("Pointer", MatLib.Tex("pointer.png"), Color.white);
             _mParticle = MatLib.Sprite("Particle", MatLib.Tex("fx_circle.png"), Color.white);
             _mBlob = MatLib.Sprite("BlobShadow", MatLib.Tex("blob_shadow.png"), Color.white);
             // URP's own sprite material batches per texture correctly (Sprites/Default does not under URP 17).
@@ -203,6 +213,109 @@ namespace JuiceKing.EditorTools
             _sHeart = MatLib.Spr("icon_heart.png");
             _sSoundOn = MatLib.Spr("icon_sound_on.png");
             _sSoundOff = MatLib.Spr("icon_sound_off.png");
+            _sCoin = UIKit.Get("icon_coin") ?? MatLib.Spr("icon_coin.png");
+            _sCash2x = MatLib.Spr("icon_cash2x.png");
+            _sTurbo = MatLib.Spr("icon_turbo.png");
+            _sMoneyBag = MatLib.Spr("icon_moneybag.png");
+            _sTrash = MatLib.Spr("icon_trash.png");
+            _sAd = MatLib.Spr("icon_ad.png");
+            _sPlay = MatLib.Spr("icon_play.png");
+            _sCrown = UIKit.Get("icon_crown") ?? MatLib.Spr("icon_crown.png");
+            _sPrice = MatLib.Spr("icon_price.png");
+            _sPanel = MatLib.Spr("ui_panel.png");
+            _sPill = MatLib.Spr("ui_pill.png");
+            _sCircleBtn = MatLib.Spr("ui_circle_btn.png");
+            _sRingThick = MatLib.Spr("ui_ring_thick.png");
+            _sShine = MatLib.Spr("ui_shine.png");
+            _sRays = MatLib.Spr("ui_rays.png");
+            _sGlow = MatLib.Spr("ui_glow.png");
+            _sSneaker = MatLib.Spr("icon_sneaker.png");
+
+            _uCoin = UIKit.Get("icon_coin");
+            _uCoins = UIKit.Get("icon_coins");
+            _uMoneyBag = UIKit.Get("icon_coinsack");
+            _uLightning = UIKit.Get("icon_lightning_orange");
+            _uRocket = UIKit.Get("icon_rocket");
+            _uCrown = UIKit.Get("icon_crown");
+            _uStar = UIKit.Get("icon_star");
+            _uChef = UIKit.Get("icon_recipe");
+            _uFarmer = UIKit.Get("icon_farmer");
+            _uWaiter = UIKit.Get("icon_girl");
+            _uBackpack = UIKit.Get("icon_backpack");
+            _uChainsaw = UIKit.Get("icon_chainsaw");
+            _uMachine = UIKit.Get("icon_machine");
+            _uTable = UIKit.Get("icon_table");
+            _uTools = UIKit.Get("icon_tools");
+            _uRecycle = UIKit.Get("icon_recycle");
+            _uLock = UIKit.Get("icon_lock");
+            _uGift = UIKit.Get("icon_gift");
+            _uArrowUp = UIKit.Get("icon_arrow_up");
+            _uWarning = UIKit.Get("icon_warning");
+            _uHeartBubble = null;
+            _uExclBubble = UIKit.Get("icon_excl");
+            _uX = UIKit.Get("btn_x");
+            _uCheck = UIKit.Get("btn_check");
+            _uBtnGreen = UIKit.Get("btn_green");
+            _uBtnYellow = UIKit.Get("btn_orange");
+            _uBtnBlue = UIKit.Get("btn_blue");
+            _uBtnOrange = UIKit.Get("btn_orange");
+            _uBtnRed = UIKit.Get("btn_red");
+            _uBtnGrey = UIKit.Get("btn_dark");
+            _uBtnCream = UIKit.Get("btn_cream");
+            _uWatchAd = UIKit.Get("icon_videoad");
+            _uBadgeAd = UIKit.Get("badge_ad");
+            _uGear = UIKit.Get("icon_gear");
+            _uSqWood = UIKit.Get("sq_wood");
+            _uSqBlue = UIKit.Get("sq_blue");
+            _uSqGreen = UIKit.Get("sq_green");
+            _uSqOrange = UIKit.Get("sq_orange");
+            _uRibbon = UIKit.Get("ribbon_red");
+            _uRibbonYellow = UIKit.Get("ribbon_yellow");
+            _uPlank = UIKit.Get("plank_sign");
+            _uNote = UIKit.Get("pill_cream");
+            _uCard = UIKit.Get("bubble_cream");
+            _uBubbleWhite = UIKit.Get("bubble_white");
+            _uPanelAwning = UIKit.Get("panel_awning");
+            _uPanelPlain = UIKit.Get("panel_plain");
+            _uPanelGold = UIKit.Get("panel_gold");
+            _uToggleOn = UIKit.Get("toggle_on");
+            _uToggleOff = UIKit.Get("toggle_off");
+            _uHeroCoins = UIKit.Get("hero_coins_big");
+            _uHeroMoneyBag = UIKit.Get("hero_moneybag");
+            _uHeroCoinBox = UIKit.Get("hero_coinbox");
+
+            string[] fxTex = { "fx_circle.png", "fx_star.png", "fx_heart.png", "fx_ring.png", "fx_drop.png", "fx_leaf.png", "fx_sparkle.png", "fx_coin.png", "fx_splat.png" };
+            for (int i = 0; i < fxTex.Length; i++)
+                _mFx[i] = MatLib.Sprite("Fx_" + ((FxShape)i), MatLib.Tex(fxTex[i]), Color.white);
+
+            _mWater = MatLib.Lit("Water", new Color(1f, 1f, 1f, 0.92f), 0.92f, MatLib.Tex("ground_water.png"), new Vector2(2f, 2f));
+            _mPath = MatLib.Lit("Ground_Path", Color.white, 0.05f, MatLib.Tex("ground_path.png"), new Vector2(1f, 3f));
+            _mCloud = MatLib.Sprite("CloudShadow", MatLib.Tex("cloud_shadow.png"), new Color(1f, 1f, 1f, 0.4f));
+            _mStraw = MatLib.Lit("StrawHat", new Color(0.95f, 0.8f, 0.4f), 0.1f);
+            _mHedge = MatLib.Lit("Hedge", new Color(0.33f, 0.66f, 0.3f), 0.15f);
+            _mBinGreen = MatLib.Lit("BinGreen", new Color(0.32f, 0.72f, 0.45f), 0.35f);
+            _mBinDark = MatLib.Lit("BinDark", new Color(0.22f, 0.52f, 0.33f), 0.35f);
+            _mAnimal = MatLib.Lit("Animals", Color.white, 0.15f, AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/ThirdParty/ithappy/Textures/Texture.png"));
+            _mDuckBody = MatLib.Lit("DuckBody", new Color(1f, 0.93f, 0.45f), 0.3f);
+            _mDuckBeak = MatLib.Lit("DuckBeak", new Color(1f, 0.55f, 0.15f), 0.3f);
+            _mLily = MatLib.Lit("LilyPad", new Color(0.35f, 0.72f, 0.3f), 0.3f);
+            _mStone = MatLib.Lit("Stone", new Color(0.72f, 0.72f, 0.74f), 0.15f);
+            _mHay = MatLib.Lit("Hay", new Color(0.95f, 0.8f, 0.42f), 0.05f);
+            _mRoof = MatLib.Lit("Roof", new Color(0.86f, 0.33f, 0.3f), 0.2f);
+            _mWhiteWall = MatLib.Lit("WhiteWall", new Color(0.98f, 0.95f, 0.9f), 0.1f);
+            _mPink = MatLib.Lit("Pink", new Color(1f, 0.55f, 0.7f), 0.3f);
+            _mBlue = MatLib.Lit("Blue", new Color(0.35f, 0.62f, 1f), 0.3f);
+            _mButterfly = MatLib.Sprite("Butterfly", MatLib.Tex("fx_heart.png"), Color.white);
+            _mWater.SetFloat("_Surface", 1f);
+            _mWater.SetFloat("_Blend", 0f);
+            _mWater.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            _mWater.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            _mWater.SetFloat("_ZWrite", 0f);
+            _mWater.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            _mWater.SetOverrideTag("RenderType", "Transparent");
+            _mWater.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            _mWater.SetShaderPassEnabled("ShadowCaster", false);
+
             _sFruit[0] = MatLib.Spr("icon_orange.png");
             _sFruit[1] = MatLib.Spr("icon_watermelon.png");
             _sFruit[2] = MatLib.Spr("icon_pineapple.png");
@@ -276,7 +389,7 @@ namespace JuiceKing.EditorTools
             anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
 
             // Soft blob shadow for readability.
-            B.Decal("Blob", root.transform, _mBlob, new Vector3(0f, 0.02f, 0f), new Vector2(1.1f, 1.1f));
+            B.Decal("Blob", root.transform, _mBlob, new Vector3(0f, 0.075f, 0f), new Vector2(1.1f, 1.1f)).GetComponent<MeshRenderer>().sortingOrder = -2;
             return root;
         }
 
@@ -332,6 +445,7 @@ namespace JuiceKing.EditorTools
             var crown = B.MeshObj("Crown", crownParent, _crown, _mGold, Vector3.zero, Vector3.one * 0.19f);
             crown.transform.position = root.transform.position + new Vector3(0f, 1.47f, 0f);
             crown.transform.localRotation = Quaternion.Euler(-8f, 0f, 0f);
+            B.MeshObj("Gem", crown.transform, B.Sphere, _mRed, new Vector3(0f, 0.22f, -0.52f), Vector3.one * 0.2f);
 
             // Chainsaw held in front-right, attached to the torso so it bobs with the body.
             var torso = B.Find(model, "torso");
@@ -341,15 +455,17 @@ namespace JuiceKing.EditorTools
             saw.owner = root.transform;
             saw.range = 1.4f;
 
-            var pc = root.AddComponent<PlayerController>();
-            pc.cc = cc;
-            pc.carrier = carrier;
-            pc.saw = saw;
-
             var ca = root.AddComponent<CharacterAnim>();
             ca.animator = anim;
             ca.alwaysHoldRight = true;
             ca.animSpeedRef = 5.2f;
+            ca.footsteps = true;
+
+            var pc = root.AddComponent<PlayerController>();
+            pc.cc = cc;
+            pc.carrier = carrier;
+            pc.saw = saw;
+            pc.anim = ca;
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             return root;
         }
@@ -384,30 +500,89 @@ namespace JuiceKing.EditorTools
                 ca.animator = anim;
                 ca.hands = carrier;
                 ca.animSpeedRef = 3.2f;
+                ca.lean = 4f;
+                cust.anim = ca;
+
+                AddAccessory(root.transform, anim.transform, _customerPrefabs.Count);
 
                 _customerPrefabs.Add(B.SavePrefab(root, Prefabs + "Customers/" + root.name + ".prefab"));
             }
+        }
+
+        /// <summary>Small hats / glasses so the crowd looks varied and cute.</summary>
+        static void AddAccessory(Transform root, Transform model, int index)
+        {
+            var head = B.Find(model, "head");
+            Transform parent = head != null ? head : model;
+            Material[] tints = { _mRed, _mBlue, _mPink, _mStraw, _mBinGreen };
+            var mat = tints[index % tints.Length];
+            // Built in world units under the unscaled root, then re-parented to the (scaled) head bone keeping world size.
+            var acc = B.Node("Accessory", root, new Vector3(0f, 1.42f, 0f));
+            var a = acc.transform;
+            switch (index % 4)
+            {
+                case 0: // baseball cap
+                    B.MeshObj("Crown", a, B.Sphere, mat, new Vector3(0f, 0.06f, 0f), new Vector3(0.44f, 0.24f, 0.44f));
+                    B.MeshObj("Brim", a, _disc, new[] { mat, mat }, new Vector3(0f, 0.03f, 0.2f), new Vector3(0.3f, 0.025f, 0.28f));
+                    break;
+                case 1: // sun hat
+                    B.MeshObj("Brim", a, _disc, new[] { _mStraw, _mStraw }, new Vector3(0f, 0.06f, 0f), new Vector3(0.56f, 0.025f, 0.56f));
+                    B.MeshObj("Top", a, _disc, new[] { _mStraw, _mStraw }, new Vector3(0f, 0.06f, 0f), new Vector3(0.32f, 0.15f, 0.32f));
+                    B.MeshObj("Band", a, _disc, new[] { mat, mat }, new Vector3(0f, 0.08f, 0f), new Vector3(0.33f, 0.045f, 0.33f));
+                    break;
+                case 2: // sunglasses
+                    a.localPosition = new Vector3(0f, 1.2f, 0.27f);
+                    B.Box("L", a, _mDark, new Vector3(-0.1f, 0f, 0f), new Vector3(0.15f, 0.08f, 0.03f));
+                    B.Box("R", a, _mDark, new Vector3(0.1f, 0f, 0f), new Vector3(0.15f, 0.08f, 0.03f));
+                    B.Box("Bridge", a, _mDark, new Vector3(0f, 0.015f, 0f), new Vector3(0.07f, 0.02f, 0.025f));
+                    break;
+                default: // bow
+                    a.localPosition = new Vector3(0.2f, 1.45f, 0f);
+                    B.MeshObj("L", a, B.Sphere, _mPink, new Vector3(-0.07f, 0f, 0f), new Vector3(0.13f, 0.1f, 0.07f));
+                    B.MeshObj("R", a, B.Sphere, _mPink, new Vector3(0.07f, 0f, 0f), new Vector3(0.13f, 0.1f, 0.07f));
+                    B.MeshObj("K", a, B.Sphere, _mRed, Vector3.zero, Vector3.one * 0.055f);
+                    break;
+            }
+            a.SetParent(parent, true);
         }
 
         static OrderBubble BuildBubble(Transform parent, Vector3 pos)
         {
             var go = B.Node("OrderBubble", parent, pos, null, Vector3.one * 0.8f);
             go.AddComponent<Billboard>();
-            var bg = B.Sprite("Bg", go.transform, _sRound, Vector3.zero, 1f, false, 10, Color.white);
-            bg.drawMode = SpriteDrawMode.Sliced;
-            bg.size = new Vector2(1.25f, 0.72f);
-            var tail = B.Sprite("Tail", go.transform, _sWhite, new Vector3(0f, -0.36f, 0.001f), 0.2f, false, 10);
-            tail.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            SpriteRenderer bg;
+            if (_uBubbleWhite != null)
+                bg = B.Sprite("Bg", go.transform, _uBubbleWhite, new Vector3(0f, -0.06f, 0f), SpriteScale(_uBubbleWhite, 1.45f), false, 10, Color.white);
+            else
+            {
+                bg = B.Sprite("Bg", go.transform, _sRound, Vector3.zero, 1f, false, 10, Color.white);
+                bg.drawMode = SpriteDrawMode.Sliced;
+                bg.size = new Vector2(1.25f, 0.72f);
+            }
             var icon = B.Sprite("Icon", go.transform, _sFruit[0], new Vector3(-0.25f, 0.02f, -0.01f), 0.22f, false, 11);
             var count = B.Text("Count", go.transform, "1", 5f, new Color(0.25f, 0.2f, 0.2f), new Vector3(0.3f, 0.02f, -0.01f), false);
             count.GetComponent<MeshRenderer>().sortingOrder = 12;
-            var happy = B.Sprite("Happy", go.transform, _sHeart, new Vector3(0f, 0.02f, -0.01f), 0.22f, false, 11);
+            var happy = B.Sprite("Happy", go.transform, _uHeartBubble ? _uHeartBubble : _sHeart, new Vector3(0f, 0.12f, -0.02f), 1.1f, false, 13);
             happy.gameObject.SetActive(false);
+            var sad = B.Sprite("Sad", go.transform, _uExclBubble ? _uExclBubble : _sHeart, new Vector3(0f, 0.12f, -0.02f), 1.1f, false, 13);
+            sad.gameObject.SetActive(false);
+
+            // Patience bar under the order.
+            var bar = B.Node("Patience", go.transform, new Vector3(0f, -0.25f, -0.012f));
+            var barBg = B.Sprite("Bg", bar.transform, _sWhite, Vector3.zero, 1f, false, 11, new Color(0.25f, 0.2f, 0.2f, 0.5f));
+            barBg.transform.localScale = new Vector3(0.9f, 0.09f, 1f);
+            var barFill = B.Sprite("Fill", bar.transform, _sWhite, new Vector3(0f, 0f, -0.002f), 1f, false, 12, new Color(0.45f, 0.9f, 0.4f));
+            barFill.transform.localScale = new Vector3(0.86f, 0.06f, 1f);
+
             var ob = go.AddComponent<OrderBubble>();
             ob.icon = icon;
             ob.countText = count;
             ob.happy = happy;
+            ob.sad = sad;
             ob.background = bg;
+            ob.patienceBar = bar;
+            ob.patienceFill = barFill.transform;
+            ob.patienceFillRenderer = barFill;
             return ob;
         }
     }

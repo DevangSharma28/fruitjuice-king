@@ -13,19 +13,30 @@ namespace JuiceKing
         public Transform body;
         public Transform blades;
         public Transform liquid;
+        public Transform hopper;
         public AudioSource hum;
         public DropZone inputZone;
         public PickupZone outputZone;
+        [Header("Dressing")]
+        public Renderer statusLight;
+        public Material ledOn, ledOff;
+        public Transform sign;
 
         bool _working;
         float _t;
         float _spin;
+        float _bubbleT;
         Vector3 _bodyScale;
         Vector3 _liquidScale;
+        Vector3 _hopperScale;
+        Vector3 _signPos;
+        bool _ledState;
 
         void Awake()
         {
             if (body != null) _bodyScale = body.localScale;
+            if (hopper != null) _hopperScale = hopper.localScale;
+            if (sign != null) _signPos = sign.localPosition;
             if (liquid != null)
             {
                 _liquidScale = liquid.localScale;
@@ -56,18 +67,24 @@ namespace JuiceKing
 
         public void Receive(StackItem item, Carrier from)
         {
-            inputPile.Add(item, 1.3f, 0.3f);
-            if (from != null && from.isPlayer) Sfx.Play(SfxId.Drop, 0.4f, Random.Range(0.95f, 1.1f));
+            bool player = from != null && from.isPlayer;
+            inputPile.Add(item, 1.3f, 0.3f, () =>
+            {
+                if (hopper != null) Tweener.Punch(hopper, 0.1f, 0.18f, _hopperScale);
+                if (player) Sfx.Play(SfxId.Drop, 0.4f, Random.Range(0.95f, 1.12f));
+            });
         }
 
         // ---------- IItemSource (output tray) ----------
         public int Available => outputPile.Count;
+        public ItemType OutputType => ItemTypes.Juice(kind);
         public StackItem Take(Carrier to) => outputPile.TakeLast();
 
         void Update()
         {
             float dt = Time.deltaTime;
             int need = Balance.SlicesPerJuice[(int)kind];
+            var col = Balance.JuiceColors[(int)kind];
 
             if (!_working && outputPile.HasSpace && inputPile.CountOf(Accepts) >= need)
             {
@@ -76,19 +93,23 @@ namespace JuiceKing
                     var s = inputPile.TakeLast(Accepts);
                     if (s == null) break;
                     s.inTransit = true;
-                    Tweener.Arc(s.transform, () => intakePoint.position, 0.8f, 0.25f, s.Despawn, null, Vector3.one * 0.4f, i * 0.06f);
+                    Tweener.Arc(s.transform, () => intakePoint.position, 0.8f, 0.25f, () =>
+                    {
+                        s.Despawn();
+                        Fx.Drops(intakePoint.position, col, 4);
+                    }, null, Vector3.one * 0.4f, i * 0.06f);
                 }
                 _working = true;
                 _t = 0f;
             }
 
-            float spinTarget = _working ? 1440f : 0f;
+            float spinTarget = _working ? 1440f * Boosts.WorkMult : 0f;
             _spin = Mathf.MoveTowards(_spin, spinTarget, dt * 3000f);
             if (blades != null) blades.Rotate(0f, _spin * dt, 0f, Space.Self);
 
             if (_working)
             {
-                _t += dt;
+                _t += dt * Boosts.WorkMult;
                 float dur = Balance.JuiceTime[(int)kind];
                 float k = Mathf.Clamp01(_t / dur);
                 SetFill(0.15f + 0.85f * k);
@@ -98,25 +119,48 @@ namespace JuiceKing
                     body.localScale = new Vector3(_bodyScale.x * (2f - w), _bodyScale.y * w, _bodyScale.z * (2f - w));
                 }
 
+                _bubbleT -= dt;
+                if (_bubbleT <= 0f && liquid != null)
+                {
+                    _bubbleT = 0.12f;
+                    Vector3 top = liquid.position + Vector3.up * liquid.lossyScale.y;
+                    Fx.Bubbles(top, Color.Lerp(col, Color.white, 0.5f), 1);
+                    if (NearPlayer() && Random.value < 0.35f) Sfx.Play(SfxId.Bubble, 0.12f, Random.Range(0.8f, 1.4f));
+                }
+
                 if (_t >= dur)
                 {
                     _working = false;
                     if (body != null)
                     {
                         body.localScale = _bodyScale;
-                        Tweener.Punch(body, 0.08f, 0.25f, _bodyScale);
+                        Tweener.Punch(body, 0.1f, 0.28f, _bodyScale);
                     }
                     SetFill(0.15f);
                     var juice = GameRefs.I.SpawnItem(ItemTypes.Juice(kind), spoutPoint.position, spoutPoint.rotation);
                     juice.transform.localScale = Vector3.one * 0.4f;
-                    outputPile.Add(juice, 0.9f, 0.35f);
+                    outputPile.Add(juice, 0.9f, 0.35f, () =>
+                    {
+                        Fx.Glint(juice.transform.position + Vector3.up * 0.35f, Color.white, 2);
+                        if (NearPlayer()) Sfx.Play(SfxId.Tink, 0.18f, Random.Range(0.95f, 1.1f));
+                    });
                     Tweener.Scale(juice.transform, Vector3.one * 0.4f, Vector3.one, 0.35f, Ease.OutBack);
-                    Fx.Sparkle(spoutPoint.position, Balance.JuiceColors[(int)kind], 5);
+                    Fx.Sparkle(spoutPoint.position, col, 5);
+                    Fx.Drops(spoutPoint.position, col, 5);
                     if (NearPlayer()) Sfx.Play(SfxId.Pour, 0.35f);
                 }
             }
 
-            if (hum != null) hum.volume = Mathf.MoveTowards(hum.volume, _working && NearPlayer() ? 0.12f : 0f, dt);
+            if (hum != null) hum.volume = Mathf.MoveTowards(hum.volume, _working && NearPlayer() ? 0.1f : 0f, dt);
+
+            // Status light: steady green while blending, off when idle.
+            if (statusLight != null && _ledState != _working)
+            {
+                _ledState = _working;
+                statusLight.sharedMaterial = _working ? ledOn : ledOff;
+            }
+            if (sign != null)
+                sign.localPosition = _signPos + Vector3.up * (Mathf.Sin(Time.time * (_working ? 9f : 2f)) * (_working ? 0.035f : 0.02f));
         }
 
         bool NearPlayer()

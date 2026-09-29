@@ -57,11 +57,41 @@ namespace JuiceKing
         public static readonly int[] SawCosts = { 40, 110, 240, 480, 900 };
         public static readonly int[] BagCosts = { 30, 90, 200, 420, 800 };
         public static readonly int[] SpeedCosts = { 30, 90, 200, 420, 800 };
+        public static readonly int[] PriceCosts = { 60, 160, 350, 700, 1300 };
+        public static readonly int[] CounterCosts = { 50, 140, 300, 600, 1100 };
 
         public static float SawDps(int lvl) => 7f + lvl * 4f;
         public static int BagCapacity(int lvl) => 8 + lvl * 4;
         public static float MoveSpeed(int lvl) => 5.2f + lvl * 0.55f;
+        public static float PriceMult(int lvl) => 1f + lvl * 0.15f;
+        /// <summary>Juice cups stacked per slot on the counter (6 x 2 slots per layer).</summary>
+        public static int CounterLayers(int lvl) => 2 + lvl;
+
+        // Customers
+        public static readonly Vector2 CustomerSpawnGap = new Vector2(0.35f, 0.9f);
+        public static readonly Vector2 CustomerSpeed = new Vector2(3.6f, 4.3f);
+        public const float CustomerPatience = 40f;
+        /// <summary>Largest order size, growing with the number of cups sold.</summary>
+        public static int MaxOrder(int sold) => sold < 5 ? 1 : sold < 25 ? 2 : sold < 80 ? 3 : 4;
 
         public const int MaxUpgradeLevel = 5;
+
+        // Rewarded boosts
+        public const float CashBoostSeconds = 120f;
+        public const float TurboSeconds = 90f;
+        public const float BoostMaxSeconds = 600f;
+        public const float CashBoostMult = 2f;
+        public const float TurboMoveMult = 1.35f;
+        public const float TurboWorkMult = 1.8f;
+        public const float FreeCashCooldown = 120f;
+        public const float UnlockAssistCooldown = 60f;
+
+        /// <summary>Free cash reward scales with how far the player has progressed.</summary>
+        public static int FreeCash(int unlockedCount) => 40 + unlockedCount * 35;
+
+        // Offline earnings (only once a helper is hired)
+        public const float OfflineMinSeconds = 60f;
+        public const float OfflineMaxSeconds = 30f * 60f;
+        public static float OfflineRate(int juicers, int helpers) => helpers <= 0 ? 0f : juicers * 0.03f + helpers * 0.12f;
     }
 }

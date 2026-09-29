@@ -26,6 +26,7 @@ namespace JuiceKing
         Vector3 _baseScale;
         Quaternion _baseRot;
         float _wobble;
+        float _idlePhase;
 
         void Awake()
         {
@@ -33,6 +34,7 @@ namespace JuiceKing
             _baseRot = visual.localRotation;
             _maxHp = Balance.FruitHp[(int)kind];
             _hp = _maxHp;
+            _idlePhase = Random.value * 10f;
             if (hpBar != null) hpBar.gameObject.SetActive(false);
         }
 
@@ -44,7 +46,7 @@ namespace JuiceKing
             float dt = Time.deltaTime;
             if (state == State.Empty)
             {
-                _regrow -= dt;
+                _regrow -= dt * Boosts.WorkMult;
                 if (_regrow <= 0f) Grow();
             }
 
@@ -57,6 +59,12 @@ namespace JuiceKing
                 float a = Mathf.Sin(Time.time * 55f) * 6f * _wobble;
                 visual.localRotation = _baseRot * Quaternion.Euler(a, 0f, a * 0.6f);
             }
+            else if (state == State.Ready)
+            {
+                // Gentle idle sway so the field feels alive.
+                float s = Mathf.Sin(Time.time * 1.3f + _idlePhase) * 1.6f;
+                visual.localRotation = _baseRot * Quaternion.Euler(s, 0f, s * 0.7f);
+            }
         }
 
         public void Hit(float damage, Carrier by, Vector3 contact)
@@ -67,8 +75,10 @@ namespace JuiceKing
             _wobble = 1f;
 
             var col = Balance.JuiceColors[(int)kind];
+            bool player = by != null && by.isPlayer;
             Fx.Chips(contact, col, 4);
-            Sfx.Play(SfxId.Chop, by != null && by.isPlayer ? 0.45f : 0.12f, Random.Range(0.9f, 1.15f));
+            if (player) Fx.Drops(contact, col, 2);
+            Sfx.Play(SfxId.Chop, player ? 0.45f : 0.1f, Random.Range(0.9f, 1.15f));
 
             // Squash a little on every hit.
             float s = 0.92f + 0.08f * Mathf.Clamp01(_hp / _maxHp);
@@ -95,12 +105,18 @@ namespace JuiceKing
 
             Vector3 center = transform.position + Vector3.up * (radius * 0.8f);
             var col = Balance.JuiceColors[(int)kind];
-            Fx.Splash(center, col, 26);
-            Fx.Chips(center, Balance.FruitColors[(int)kind], 8);
             bool loud = by != null && by.isPlayer;
-            Sfx.Play(SfxId.Splat, loud ? 0.7f : 0.2f);
+            Fx.JuiceBurst(center, transform.position, col, loud ? 1f : 0.6f);
+            Fx.Chips(center, Balance.FruitColors[(int)kind], 8);
+            Fx.Leaves(center + Vector3.up * 0.3f, loud ? 5 : 2);
+            if (loud)
+            {
+                Fx.Ring(transform.position, new Color(1f, 1f, 1f, 0.55f), radius * 3.2f);
+                CameraFollow.Shake(0.06f, 0.12f);
+            }
+            Sfx.Play(SfxId.Splat, loud ? 0.75f : 0.18f, Random.Range(0.92f, 1.08f));
 
-            Tweener.Scale(visual, _baseScale * 1.15f, Vector3.zero, 0.18f, Ease.InQuad, () => visual.gameObject.SetActive(false));
+            Tweener.Scale(visual, _baseScale * 1.18f, Vector3.zero, 0.16f, Ease.InQuad, () => visual.gameObject.SetActive(false));
 
             int n = Balance.SlicesPerFruit[(int)kind];
             var refs = GameRefs.I;
@@ -110,7 +126,7 @@ namespace JuiceKing
                 float ang = (i / (float)n) * Mathf.PI * 2f + Random.Range(-0.4f, 0.4f);
                 float dist = Random.Range(radius + 0.2f, radius + 0.9f);
                 Vector3 land = transform.position + new Vector3(Mathf.Cos(ang) * dist, 0.02f, Mathf.Sin(ang) * dist);
-                LooseItems.Drop(it, land);
+                LooseItems.Drop(it, land, i * 0.03f);
             }
         }
 
@@ -120,7 +136,8 @@ namespace JuiceKing
             _hp = _maxHp;
             visual.gameObject.SetActive(true);
             visual.localRotation = _baseRot;
-            Tweener.Scale(visual, Vector3.zero, _baseScale, 0.9f, Ease.OutBack, () =>
+            Fx.Leaves(transform.position + Vector3.up * 0.3f, 2);
+            Tweener.Scale(visual, Vector3.zero, _baseScale, 0.9f, Ease.OutElastic, () =>
             {
                 state = State.Ready;
                 if (blocker != null) blocker.enabled = true;

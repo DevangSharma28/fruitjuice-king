@@ -140,6 +140,7 @@ namespace JuiceKing.EditorTools
             var ac = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
             ac.AddParameter("Speed", AnimatorControllerParameterType.Float);
             ac.AddParameter("Hold", AnimatorControllerParameterType.Int);
+            ac.AddParameter("Cheer", AnimatorControllerParameterType.Trigger);
 
             var loco = ac.CreateBlendTreeInController("Locomotion", out var tree, 0);
             tree.blendType = BlendTreeType.Simple1D;
@@ -149,6 +150,23 @@ namespace JuiceKing.EditorTools
             tree.AddChild(clips["walk"], 1.8f);
             tree.AddChild(clips["sprint"], 4.4f);
             ac.layers[0].stateMachine.defaultState = loco;
+
+            // Happy one-shot emote, returns to locomotion.
+            if (clips.TryGetValue("emote-yes", out var yes))
+            {
+                var baseSm = ac.layers[0].stateMachine;
+                var cheer = baseSm.AddState("Cheer");
+                cheer.motion = yes;
+                var toCheer = baseSm.AddAnyStateTransition(cheer);
+                toCheer.AddCondition(AnimatorConditionMode.If, 0, "Cheer");
+                toCheer.hasExitTime = false;
+                toCheer.duration = 0.08f;
+                toCheer.canTransitionToSelf = false;
+                var back = cheer.AddTransition(loco);
+                back.hasExitTime = true;
+                back.exitTime = 0.85f;
+                back.duration = 0.15f;
+            }
 
             var sm = new AnimatorStateMachine { name = "Arms", hideFlags = HideFlags.HideInHierarchy };
             AssetDatabase.AddObjectToAsset(sm, ac);

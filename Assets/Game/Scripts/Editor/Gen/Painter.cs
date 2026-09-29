@@ -60,6 +60,38 @@ namespace JuiceKing.EditorTools
             }
         }
 
+        /// <summary>Fill a signed distance field with a per-pixel colour.</summary>
+        public void FillFn(Func<float, float, float> sdf, Func<float, float, Color> color, float x0 = 0, float y0 = 0, float x1 = -1, float y1 = -1)
+        {
+            if (x1 < 0) x1 = W;
+            if (y1 < 0) y1 = H;
+            int ix0 = Mathf.Max(0, Mathf.FloorToInt(x0) - 2), iy0 = Mathf.Max(0, Mathf.FloorToInt(y0) - 2);
+            int ix1 = Mathf.Min(W, Mathf.CeilToInt(x1) + 2), iy1 = Mathf.Min(H, Mathf.CeilToInt(y1) + 2);
+            for (int y = iy0; y < iy1; y++)
+            for (int x = ix0; x < ix1; x++)
+            {
+                float d = sdf(x + 0.5f, y + 0.5f);
+                float cov = Mathf.Clamp01(0.5f - d);
+                if (cov > 0f) Blend(x, y, color(x + 0.5f, y + 0.5f), cov);
+            }
+        }
+
+        /// <summary>Soft (feathered) fill: coverage ramps over <paramref name="feather"/> pixels outside the shape.</summary>
+        public void FillSoft(Func<float, float, float> sdf, Color c, float feather, float x0 = 0, float y0 = 0, float x1 = -1, float y1 = -1)
+        {
+            if (x1 < 0) x1 = W;
+            if (y1 < 0) y1 = H;
+            int ix0 = Mathf.Max(0, Mathf.FloorToInt(x0) - 2), iy0 = Mathf.Max(0, Mathf.FloorToInt(y0) - 2);
+            int ix1 = Mathf.Min(W, Mathf.CeilToInt(x1) + 2), iy1 = Mathf.Min(H, Mathf.CeilToInt(y1) + 2);
+            for (int y = iy0; y < iy1; y++)
+            for (int x = ix0; x < ix1; x++)
+            {
+                float d = sdf(x + 0.5f, y + 0.5f);
+                float cov = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((d + feather * 0.5f) / Mathf.Max(0.01f, feather)));
+                if (cov > 0f) Blend(x, y, c, cov);
+            }
+        }
+
         /// <summary>Fill with an outline drawn first (outline grows the shape by width px).</summary>
         public void FillOutlined(Func<float, float, float> sdf, Color fill, Color outline, float width)
         {

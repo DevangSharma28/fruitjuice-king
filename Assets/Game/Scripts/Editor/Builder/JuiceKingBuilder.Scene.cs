@@ -22,6 +22,7 @@ namespace JuiceKing.EditorTools
         static System.Random _rnd;
 
         static Transform _world, _stations, _unlocks, _decor, _actors;
+        static TrashBin _trash;
         static readonly List<UnlockZone> _zones = new List<UnlockZone>();
 
         // ================================================================== entry points
@@ -30,6 +31,7 @@ namespace JuiceKing.EditorTools
         public static void BuildEverything()
         {
             ArtGen.GenerateAll();
+            UIKit.BuildAll();
             AssetDatabase.Refresh();
             KenneyImport.ConfigureModels();
             _controller = KenneyImport.BuildController();
@@ -48,8 +50,7 @@ namespace JuiceKing.EditorTools
         [MenuItem("Juice King/Rebuild Scene (skip art + import)", priority = 1)]
         public static void RebuildSceneOnly()
         {
-            _controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(KenneyImport.ControllerPath);
-            if (_controller == null) _controller = KenneyImport.BuildController();
+            _controller = KenneyImport.BuildController();
             KenneyImport.TintNature();
             BuildFont();
             BuildMeshes();
@@ -89,11 +90,12 @@ namespace JuiceKing.EditorTools
             _rnd = new System.Random(1234);
             _zones.Clear();
 
-            _mPadIn = MatLib.Sprite("Pad_In", MatLib.Tex("pad_solid.png"), new Color(1f, 0.78f, 0.25f, 1f));
-            _mPadOut = MatLib.Sprite("Pad_Out", MatLib.Tex("pad_solid.png"), new Color(0.45f, 1f, 0.5f, 1f));
-            _mPadCounter = MatLib.Sprite("Pad_Counter", MatLib.Tex("pad_solid.png"), new Color(0.45f, 0.8f, 1f, 1f));
-            _mPadCash = MatLib.Sprite("Pad_Cash", MatLib.Tex("pad_solid.png"), new Color(0.55f, 1f, 0.55f, 1f));
-            _mPadUpgrade = MatLib.Sprite("Pad_Upgrade", MatLib.Tex("pad_solid.png"), new Color(0.85f, 0.6f, 1f, 1f));
+            BuildStationMaterials();
+            _mPadIn = PadMat("In", new Color(1f, 0.78f, 0.2f, 1f));
+            _mPadOut = PadMat("Out", new Color(0.4f, 0.95f, 0.45f, 1f));
+            _mPadCounter = PadMat("Counter", new Color(0.4f, 0.75f, 1f, 1f));
+            _mPadCash = PadMat("Cash", new Color(0.5f, 1f, 0.5f, 1f));
+            _mPadUpgrade = PadMat("Upgrade", new Color(0.8f, 0.55f, 1f, 1f));
             _mPadUnlock = MatLib.Sprite("Pad_Unlock", MatLib.Tex("pad_dashed.png"), new Color(1f, 1f, 1f, 1f));
             _mLeaf = MatLib.Lit("Leaf", new Color(0.3f, 0.66f, 0.26f), 0.2f);
             _mSoilDark = MatLib.Lit("SoilDark", new Color(0.45f, 0.3f, 0.18f), 0.05f);
@@ -113,6 +115,10 @@ namespace JuiceKing.EditorTools
             var gm = systems.AddComponent<GameManager>();
             var refs = systems.AddComponent<GameRefs>();
             systems.AddComponent<LooseItems>();
+            systems.AddComponent<Boosts>();
+            _ambient = systems.AddComponent<Ambient>();
+            _nature = B.Node("Nature", _world, Vector3.zero).transform;
+            BuildEnvMeshes();
 
             BuildLighting();
             BuildGround();
@@ -151,6 +157,7 @@ namespace JuiceKing.EditorTools
 
             // ---------------- customers
             var cm = BuildCustomers(systems.transform, counter, cash);
+            _trash = BuildTrashBin(new Vector3(-9.8f, 0f, -1.2f), new Vector3(-8.0f, 0f, -1.2f));
 
             // ---------------- player & helpers
             var player = BuildPlayerObject();
@@ -158,24 +165,25 @@ namespace JuiceKing.EditorTools
             player.transform.position = new Vector3(0f, 0f, -3f);
             SetLayerRecursive(player, 2);
 
-            var waiter = BuildWaiter(new Vector3(7.6f, 0f, -4.2f), new[] { orangeJuicer, melonJuicer, pineJuicer }, counter);
+            var waiter = BuildWaiter(new Vector3(7.6f, 0f, -4.2f), new[] { orangeJuicer, melonJuicer, pineJuicer }, counter, cm);
             var farmerOrange = BuildFarmer(0, orangeField, orangeJuicer, new Vector3(-10.6f, 0f, 2.2f), "character-male-d");
             var farmerMelon = BuildFarmer(1, melonField, melonJuicer, new Vector3(10.6f, 0f, 2.2f), "character-male-f");
             var farmerPine = BuildFarmer(2, pineField, pineJuicer, new Vector3(5.4f, 0f, 16.6f), "character-female-d");
 
             // ---------------- unlock chain
-            var zFarmerPine = Unlock("farmer_pine", "Pineapple Farmer", 700, new Vector3(5.4f, 0f, 16.6f), _sWorker, new[] { farmerPine });
-            var zFarmerMelon = Unlock("farmer_melon", "Melon Farmer", 550, new Vector3(10.6f, 0f, 2.2f), _sWorker, new[] { farmerMelon }, zFarmerPine);
-            var zFarmerOrange = Unlock("farmer_orange", "Orange Farmer", 400, new Vector3(-10.6f, 0f, 2.2f), _sWorker, new[] { farmerOrange }, zFarmerMelon);
-            var zPineJuicer = Unlock("pine_juicer", "Pineapple Juicer", 350, pineJuicer.transform.position, _sJuice, new[] { pineJuicer.gameObject }, zFarmerOrange);
-            var zPineField = Unlock("pine_field", "Pineapple Field", 250, new Vector3(0f, 0f, 15.2f), _sFruit[2], new[] { pineField.transform.parent.gameObject }, zPineJuicer);
-            var zPatio = Unlock("patio", "Cozy Patio", 150, patio.transform.position, _sStar, new[] { patio });
-            var zWaiter = Unlock("hire_waiter", "Hire Waiter", 180, new Vector3(7.6f, 0f, -4.2f), _sWorker, new[] { waiter }, zPineField, zPatio);
+            var zFarmerPine = Unlock("farmer_pine", "Pineapple Farmer", 700, new Vector3(5.4f, 0f, 16.6f), _uFarmer, new[] { farmerPine });
+            var zFarmerMelon = Unlock("farmer_melon", "Melon Farmer", 550, new Vector3(10.6f, 0f, 2.2f), _uFarmer, new[] { farmerMelon }, zFarmerPine);
+            var zFarmerOrange = Unlock("farmer_orange", "Orange Farmer", 400, new Vector3(-10.6f, 0f, 2.2f), _uFarmer, new[] { farmerOrange }, zFarmerMelon);
+            // Each juicer unlocks before its field, so harvested fruit always has somewhere to go.
+            var zPineField = Unlock("pine_field", "Pineapple Field", 350, new Vector3(0f, 0f, 15.2f), _sFruit[2], new[] { pineField.transform.parent.gameObject }, zFarmerOrange);
+            var zPineJuicer = Unlock("pine_juicer", "Pineapple Juicer", 250, pineJuicer.transform.position, _uMachine, new[] { pineJuicer.gameObject }, zPineField);
+            var zPatio = Unlock("patio", "Cozy Patio", 150, patio.transform.position, _uStar, new[] { patio });
+            var zWaiter = Unlock("hire_waiter", "Hire Waiter", 180, new Vector3(7.6f, 0f, -4.2f), _uWaiter, new[] { waiter }, zPineJuicer, zPatio);
             var zMelonMore = Unlock("melon_more", "More Melons", 120, new Vector3(6.5f, 0f, 11.6f), _sFruit[1], new[] { melonMore });
-            var zMelonJuicer = Unlock("melon_juicer", "Melon Juicer", 100, melonJuicer.transform.position, _sJuice, new[] { melonJuicer.gameObject }, zWaiter, zMelonMore);
-            var zMelonField = Unlock("melon_field", "Watermelon Field", 60, new Vector3(6.5f, 0f, 7.2f), _sFruit[1], new[] { melonField.transform.parent.gameObject }, zMelonJuicer);
-            var zUpgrades = Unlock("upgrades", "Upgrade Shop", 40, new Vector3(-8.4f, 0f, -5f), _sSaw, new[] { upgradeStation });
-            var zOrangeMore = Unlock("orange_more", "More Oranges", 20, new Vector3(-6.5f, 0f, 11.3f), _sFruit[0], new[] { orangeMore }, zUpgrades, zMelonField);
+            var zMelonField = Unlock("melon_field", "Watermelon Field", 100, new Vector3(6.5f, 0f, 7.2f), _sFruit[1], new[] { melonField.transform.parent.gameObject }, zWaiter, zMelonMore);
+            var zMelonJuicer = Unlock("melon_juicer", "Melon Juicer", 60, melonJuicer.transform.position, _uMachine, new[] { melonJuicer.gameObject }, zMelonField);
+            var zUpgrades = Unlock("upgrades", "Upgrade Shop", 40, new Vector3(-8.4f, 0f, -5f), _uTools, new[] { upgradeStation });
+            var zOrangeMore = Unlock("orange_more", "More Oranges", 20, new Vector3(-6.5f, 0f, 11.3f), _sFruit[0], new[] { orangeMore }, zUpgrades, zMelonJuicer);
             zOrangeMore.startVisible = true;
 
             var um = systems.AddComponent<UnlockManager>();
@@ -198,11 +206,18 @@ namespace JuiceKing.EditorTools
             tut.firstJuicer = orangeJuicer;
             tut.counter = counter;
             tut.cash = cash;
-            var arrow = B.MeshObj("GuideArrow", _actors, _arrow, _mYellow, new Vector3(0, 3, 0), Vector3.one * 0.9f, null, false);
+            var arrowMat = Emissive("GuideGlow", new Color(1f, 0.82f, 0.1f), 1.5f);
+            var outlineMat = MatLib.Lit("GuideOutline", new Color(0.3f, 0.16f, 0.04f), 0f);
+            outlineMat.SetFloat("_Cull", 1f); // front-face culled shell = cartoon outline
+            UnityEditor.EditorUtility.SetDirty(outlineMat);
+            var arrow = B.MeshObj("GuideArrow", _actors, _arrow, arrowMat, new Vector3(0, 3, 0), Vector3.one * 1.35f, null, false);
+            B.MeshObj("Outline", arrow.transform, _arrow, outlineMat, new Vector3(0f, -0.07f, 0f), Vector3.one * 1.13f, null, false);
             tut.arrow = arrow.transform;
             var pointer = B.Node("GuidePointer", _actors, Vector3.zero);
-            B.Decal("Chevron", pointer.transform, _mPointer, new Vector3(0f, 0f, 0.2f), new Vector2(0.9f, 0.9f));
+            B.Decal("Chevron", pointer.transform, _mPointer, new Vector3(0f, 0f, 0.35f), new Vector2(1.5f, 1.5f)).GetComponent<MeshRenderer>().sortingOrder = 6;
             tut.pointer = pointer.transform;
+            tut.edgeArrow = _edgeArrow;
+            tut.edgeArea = _edgeArea;
 
             // ---------------- refs
             refs.slicePrefabs = _slicePrefabs;
@@ -212,6 +227,7 @@ namespace JuiceKing.EditorTools
             refs.juiceIcon = _sJuice;
             refs.moneyIcon = _sMoney;
             refs.particleMaterial = _mParticle;
+            refs.fxMaterials = _mFx;
             refs.font = B.Font;
             refs.floatingTextPrefab = _floatingText;
             refs.customerPrefabs = _customerPrefabs.ToArray();
@@ -221,7 +237,45 @@ namespace JuiceKing.EditorTools
             refs.cashPile = cash;
 
             BuildDecor();
+            BuildPlazaDressing();
+            BuildPond(new Vector3(-8.0f, 0f, 16.3f), 2.3f);
+            BuildWindmill(new Vector3(-16.5f, 0f, 9f));
+            BuildCoop(new Vector3(10.2f, 0f, 16.6f));
+            BuildCritters();
+            BuildButterflies();
+            BuildClouds();
+            BuildGroundCover();
+            OptimizeScene();
+            // Static-batch the scenery; animated decor (swayers, spinners, critters) is un-flagged below.
             MarkStatic(_decor.gameObject);
+            foreach (var n in new[] { "Trees", "Plants", "GroundCover" })
+            {
+                var t = _nature.Find(n);
+                if (t != null) MarkStatic(t.gameObject);
+            }
+            foreach (var w in _decor.GetComponentsInChildren<Wanderer>(true)) ClearStatic(w.gameObject);
+            foreach (var n in new[] { "Butterflies", "CloudShadows", "Pond/Water" })
+            {
+                var t = _decor.Find(n);
+                if (t != null) ClearStatic(t.gameObject);
+            }
+            foreach (var sw in _ambient.swayers) if (sw.t != null) ClearStatic(sw.t.gameObject);
+            foreach (var sp in _ambient.spinners) if (sp.t != null) ClearStatic(sp.t.gameObject);
+            var water = _decor.Find("Pond/Water");
+            if (water != null) _ambient.water = new[] { water.GetComponent<Renderer>() };
+            // Grass tufts no longer sway, so they can be static-batched with the rest of the ground cover.
+            var cover = _nature.Find("GroundCover");
+            if (cover != null) MarkStatic(cover.gameObject);
+            // Decor layers get per-layer cull distances on the camera (see CameraFollow): big props far, small props near.
+            SetLayerRecursive(_decor.gameObject, CameraFollow.BigDecorLayer);
+            SetLayerRecursive(_nature.gameObject, CameraFollow.BigDecorLayer);
+            foreach (var n in new[] { "GroundCover", "Plants" })
+            {
+                var t = _nature.Find(n);
+                if (t != null) SetLayerRecursive(t.gameObject, CameraFollow.SmallDecorLayer);
+            }
+            var flies = _decor.Find("Butterflies");
+            if (flies != null) SetLayerRecursive(flies.gameObject, CameraFollow.SmallDecorLayer);
             foreach (var n in new[] { "Grass", "Plaza", "Path", "Sidewalk", "Curb", "Road", "CurbFar" })
             {
                 var g = _world.Find(n);
@@ -241,6 +295,12 @@ namespace JuiceKing.EditorTools
                     StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
         }
 
+        static void ClearStatic(GameObject go)
+        {
+            foreach (var t in go.GetComponentsInChildren<Transform>(true))
+                GameObjectUtility.SetStaticEditorFlags(t.gameObject, 0);
+        }
+
         static void SetLayerRecursive(GameObject go, int layer)
         {
             foreach (var t in go.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = layer;
@@ -253,22 +313,22 @@ namespace JuiceKing.EditorTools
             var sun = new GameObject("Sun");
             var l = sun.AddComponent<Light>();
             l.type = LightType.Directional;
-            l.color = new Color(1f, 0.95f, 0.86f);
-            l.intensity = 1.35f;
+            l.color = new Color(1f, 0.93f, 0.8f);
+            l.intensity = 1.3f;
             l.shadows = LightShadows.Soft;
-            l.shadowStrength = 0.55f;
-            sun.transform.rotation = Quaternion.Euler(52f, -38f, 0f);
+            l.shadowStrength = 0.5f;
+            sun.transform.rotation = Quaternion.Euler(48f, -32f, 0f);
 
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.78f, 0.86f, 0.98f);
-            RenderSettings.ambientEquatorColor = new Color(0.66f, 0.72f, 0.66f);
-            RenderSettings.ambientGroundColor = new Color(0.45f, 0.42f, 0.38f);
+            RenderSettings.ambientSkyColor = new Color(0.8f, 0.87f, 1f);
+            RenderSettings.ambientEquatorColor = new Color(0.72f, 0.76f, 0.66f);
+            RenderSettings.ambientGroundColor = new Color(0.5f, 0.45f, 0.38f);
             RenderSettings.skybox = null;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.62f, 0.84f, 0.97f);
-            RenderSettings.fogStartDistance = 42f;
-            RenderSettings.fogEndDistance = 80f;
+            RenderSettings.fogColor = new Color(0.7f, 0.87f, 0.98f);
+            RenderSettings.fogStartDistance = 40f;
+            RenderSettings.fogEndDistance = 78f;
             RenderSettings.sun = l;
 
             // Post processing.
@@ -276,12 +336,14 @@ namespace JuiceKing.EditorTools
             var tone = profile.Add<Tonemapping>(true);
             tone.mode.Override(TonemappingMode.Neutral);
             var ca = profile.Add<ColorAdjustments>(true);
-            ca.postExposure.Override(0.15f);
-            ca.contrast.Override(10f);
-            ca.saturation.Override(18f);
+            ca.postExposure.Override(0.18f);
+            ca.contrast.Override(8f);
+            ca.saturation.Override(20f);
+            var wb = profile.Add<WhiteBalance>(true);
+            wb.temperature.Override(6f);
             var bloom = profile.Add<Bloom>(true);
-            bloom.threshold.Override(1f);
-            bloom.intensity.Override(0.35f);
+            bloom.threshold.Override(0.95f);
+            bloom.intensity.Override(0.45f);
             bloom.scatter.Override(0.6f);
             var vig = profile.Add<Vignette>(true);
             vig.intensity.Override(0.2f);
@@ -305,8 +367,8 @@ namespace JuiceKing.EditorTools
 
             B.Box("Plaza", _world, _mTiles, new Vector3(0f, 0.01f, -4.6f), new Vector3(24f, 0.02f, 16.4f), null, false);
             // path to the pineapple field
-            var path = B.Box("Path", _world, _mTiles, new Vector3(0f, 0.01f, 7.2f), new Vector3(4.4f, 0.02f, 7.4f), null, false);
-            path.GetComponent<MeshRenderer>().sharedMaterial = MatLib.Lit("Ground_Tiles_Path", Color.white, 0.12f, MatLib.Tex("ground_tiles.png"), new Vector2(2f, 3.5f));
+            var path = B.Box("Path", _world, _mTiles, new Vector3(0f, 0.01f, 7.25f), new Vector3(4.4f, 0.02f, 7.3f), null, false);
+            path.GetComponent<MeshRenderer>().sharedMaterial = MatLib.Lit("Ground_Tiles_Path", Color.white, 0.12f, MatLib.Tex("ground_tiles.png"), new Vector2(1f, 1.7f));
 
             B.Box("Sidewalk", _world, _mSidewalk, new Vector3(0f, 0.03f, -14.1f), new Vector3(110f, 0.06f, 2.6f), null, false);
             B.Box("Curb", _world, _mCurb, new Vector3(0f, 0.07f, -15.45f), new Vector3(110f, 0.14f, 0.25f), null, false);
@@ -337,7 +399,7 @@ namespace JuiceKing.EditorTools
             go.tag = "MainCamera";
             var cam = go.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.62f, 0.84f, 0.97f);
+            cam.backgroundColor = new Color(0.7f, 0.87f, 0.98f);
             cam.fieldOfView = 50f;
             cam.nearClipPlane = 0.3f;
             cam.farClipPlane = 120f;
@@ -347,7 +409,10 @@ namespace JuiceKing.EditorTools
             data.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
             var follow = go.AddComponent<CameraFollow>();
             follow.target = target;
-            follow.offset = new Vector3(0f, 12.8f, -11.2f);
+            follow.offset = new Vector3(0f, 15.6f, -13.8f);
+            follow.portraitFov = 52f;
+            follow.landscapeFov = 40f;
+            follow.lookAhead = 1.4f;
             go.transform.position = target.position + follow.offset;
             go.transform.rotation = Quaternion.LookRotation(-follow.offset.normalized);
             return cam;
@@ -355,11 +420,22 @@ namespace JuiceKing.EditorTools
 
         // ================================================================== fields
 
+        /// <summary>Low wooden frame around a soil bed (visual only).</summary>
+        static void BedFrame(Transform parent, Vector3 center, Vector2 size, bool south = true)
+        {
+            const float h = 0.14f, w = 0.14f;
+            B.Box("FrameN", parent, _mWood, center + new Vector3(0f, h * 0.5f, size.y * 0.5f), new Vector3(size.x + w, h, w), null, false);
+            if (south) B.Box("FrameS", parent, _mWood, center + new Vector3(0f, h * 0.5f, -size.y * 0.5f), new Vector3(size.x + w, h, w), null, false);
+            B.Box("FrameE", parent, _mWood, center + new Vector3(size.x * 0.5f, h * 0.5f, 0f), new Vector3(w, h, size.y), null, false);
+            B.Box("FrameW", parent, _mWood, center + new Vector3(-size.x * 0.5f, h * 0.5f, 0f), new Vector3(w, h, size.y), null, false);
+        }
+
         static FruitField BuildField(int f, Vector3 center, Vector2 size, Vector2[] spots, string name)
         {
             var root = B.Node(name, _stations, Vector3.zero);
             var soil = B.Box("Soil", root.transform, _mSoil, center + new Vector3(0f, 0.025f, 0f), new Vector3(size.x, 0.05f, size.y), null, false);
             soil.GetComponent<MeshRenderer>().sharedMaterial = MatLib.Lit("Ground_Soil_" + f, Color.white, 0.02f, MatLib.Tex("ground_soil.png"), new Vector2(size.x / 3f, size.y / 3f));
+            BedFrame(root.transform, center, size);
 
             var fieldGo = B.Node("Field", root.transform, center);
             var field = fieldGo.AddComponent<FruitField>();
@@ -374,6 +450,7 @@ namespace JuiceKing.EditorTools
             var root = B.Node(FruitKey[f] + "Expansion", field.transform.parent, Vector3.zero);
             var soil = B.Box("Soil", root.transform, _mSoil, center + new Vector3(0f, 0.025f, 0f), new Vector3(size.x, 0.05f, size.y), null, false);
             soil.GetComponent<MeshRenderer>().sharedMaterial = MatLib.Lit("Ground_Soil_X" + f, Color.white, 0.02f, MatLib.Tex("ground_soil.png"), new Vector2(size.x / 3f, size.y / 3f));
+            BedFrame(root.transform, center, size, false);
             foreach (var s in spots) BuildFruit(f, field, root.transform, new Vector3(s.x, 0f, s.y));
             return root;
         }
@@ -433,148 +510,6 @@ namespace JuiceKing.EditorTools
         }
 
         // ================================================================== stations
-
-        static T MakeZone<T>(string name, Transform parent, Vector3 worldPos, Vector2 size, Material mat, Sprite icon) where T : Zone
-        {
-            var go = B.Node(name, parent, Vector3.zero);
-            go.transform.position = worldPos;
-            var pad = B.Node("Pad", go.transform, new Vector3(0f, 0.035f, 0f), null, new Vector3(size.x, 1f, size.y));
-            B.Decal("Frame", pad.transform, mat, Vector3.zero, Vector2.one);
-            if (icon != null) B.Sprite("Icon", go.transform, icon, new Vector3(0f, 0.045f, 0f), Mathf.Min(size.x, size.y) * 0.16f, true, 1, new Color(1f, 1f, 1f, 0.85f));
-            var z = go.AddComponent<T>();
-            z.size = size;
-            z.padVisual = pad.transform;
-            return z;
-        }
-
-        static Juicer BuildJuicer(int f, Vector3 pos)
-        {
-            var root = B.Node("Juicer_" + FruitKey[f], _stations, pos);
-            var t = root.transform;
-            var body = B.Node("Body", t, Vector3.zero);
-            var bt = body.transform;
-
-            B.Box("Base", bt, _mDark, new Vector3(0f, 0.12f, 0f), new Vector3(1.9f, 0.24f, 1.7f));
-            B.Box("Cabinet", bt, _mFruitBody[f], new Vector3(0f, 0.8f, 0f), new Vector3(1.55f, 1.12f, 1.3f));
-            B.Box("Band", bt, _mWhite, new Vector3(0f, 1.3f, 0f), new Vector3(1.6f, 0.12f, 1.35f));
-            B.Sprite("IconFront", bt, _sFruit[f], new Vector3(0f, 0.9f, -0.66f), 0.24f, false, 0).transform.localRotation = Quaternion.identity;
-            var back = B.Sprite("IconBack", bt, _sFruit[f], new Vector3(0f, 0.9f, 0.66f), 0.24f, false, 0);
-            back.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-
-            // Glass jar with juice and spinning blades.
-            B.MeshObj("JarBase", bt, _disc, new[] { _mSteel, _mSteel }, new Vector3(0f, 1.36f, 0f), new Vector3(1.0f, 0.1f, 1.0f));
-            var liquid = B.MeshObj("Liquid", bt, _disc, new[] { _mJuice[f], _mJuice[f] }, new Vector3(0f, 1.46f, 0f), new Vector3(0.72f, 0.95f, 0.72f), null, false);
-            var blades = B.Node("Blades", bt, new Vector3(0f, 1.52f, 0f));
-            B.Box("B1", blades.transform, _mSteel, Vector3.zero, new Vector3(0.7f, 0.03f, 0.1f));
-            B.Box("B2", blades.transform, _mSteel, Vector3.zero, new Vector3(0.1f, 0.03f, 0.7f));
-            B.MeshObj("Jar", bt, _cup, _mGlass, new Vector3(0f, 1.44f, 0f), new Vector3(0.95f, 1.0f, 0.95f), null, false);
-            B.MeshObj("Funnel", bt, _funnel, _mFruitBody[f], new Vector3(0f, 2.44f, 0f), new Vector3(0.62f, 0.5f, 0.62f));
-            var intake = B.Node("Intake", bt, new Vector3(0f, 2.9f, 0f));
-
-            // Spout + output tray (south, toward the counter).
-            B.MeshObj("Spout", bt, B.Cylinder, _mSteel, new Vector3(0f, 0.95f, -0.8f), new Vector3(0.16f, 0.16f, 0.16f), new Vector3(90f, 0f, 0f));
-            var spout = B.Node("SpoutPoint", bt, new Vector3(0f, 0.85f, -0.95f));
-            var tray = B.Node("Tray", t, new Vector3(0f, 0f, -1.62f));
-            B.Box("Top", tray.transform, _mWood, new Vector3(0f, 0.5f, 0f), new Vector3(1.5f, 0.08f, 0.95f));
-            foreach (var lx in new[] { -0.65f, 0.65f })
-            foreach (var lz in new[] { -0.38f, 0.38f })
-                B.Box("Leg", tray.transform, _mDark, new Vector3(lx, 0.25f, lz), new Vector3(0.08f, 0.5f, 0.08f));
-            var outPile = B.Node("OutputPile", tray.transform, new Vector3(0f, 0.54f, 0f)).AddComponent<ItemPile>();
-            outPile.columns = 4;
-            outPile.rows = 2;
-            outPile.layers = 3;
-            outPile.spacing = new Vector2(0.34f, 0.4f);
-            outPile.layerHeight = 0.37f;
-
-            // Input crate (north, toward the fields).
-            var crate = B.Node("Crate", t, new Vector3(0f, 0f, 1.45f));
-            B.Box("Base", crate.transform, _mWood, new Vector3(0f, 0.17f, 0f), new Vector3(1.15f, 0.34f, 1.05f));
-            B.Box("RimL", crate.transform, _mWood, new Vector3(-0.55f, 0.42f, 0f), new Vector3(0.08f, 0.18f, 1.05f));
-            B.Box("RimR", crate.transform, _mWood, new Vector3(0.55f, 0.42f, 0f), new Vector3(0.08f, 0.18f, 1.05f));
-            B.Box("RimB", crate.transform, _mWood, new Vector3(0f, 0.42f, 0.5f), new Vector3(1.15f, 0.18f, 0.08f));
-            var inPile = B.Node("InputPile", t, new Vector3(0f, 0.36f, 1.45f)).AddComponent<ItemPile>();
-            inPile.columns = 2;
-            inPile.rows = 2;
-            inPile.layers = 6;
-            inPile.spacing = new Vector2(0.42f, 0.42f);
-            inPile.layerHeight = 0.13f;
-
-            var col = root.AddComponent<BoxCollider>();
-            col.center = new Vector3(0f, 1.2f, -0.1f);
-            col.size = new Vector3(1.9f, 2.4f, 4.1f);
-
-            var hum = root.AddComponent<AudioSource>();
-            hum.playOnAwake = true;
-            hum.loop = true;
-
-            var j = root.AddComponent<Juicer>();
-            j.kind = (FruitKind)f;
-            j.inputPile = inPile;
-            j.outputPile = outPile;
-            j.intakePoint = intake.transform;
-            j.spoutPoint = spout.transform;
-            j.body = bt;
-            j.blades = blades.transform;
-            j.liquid = liquid.transform;
-            j.hum = hum;
-
-            var dz = MakeZone<DropZone>("InputZone", t, pos + new Vector3(0f, 0f, 3.0f), new Vector2(2.3f, 1.5f), _mPadIn, _sFruit[f]);
-            dz.receiverBehaviour = j;
-            var pz = MakeZone<PickupZone>("OutputZone", t, pos + new Vector3(0f, 0f, -3.0f), new Vector2(2.3f, 1.4f), _mPadOut, _sJuice);
-            pz.sourceBehaviour = j;
-            j.inputZone = dz;
-            j.outputZone = pz;
-            return j;
-        }
-
-        static Counter BuildCounter(Vector3 pos)
-        {
-            var root = B.Node("JuiceStand", _stations, pos);
-            var t = root.transform;
-            B.Box("Counter", t, _mWood, new Vector3(0f, 0.5f, 0f), new Vector3(4.4f, 1.0f, 1.1f));
-            B.Box("Top", t, _mWhite, new Vector3(0f, 1.04f, 0f), new Vector3(4.6f, 0.08f, 1.3f));
-            B.Box("Kick", t, _mDark, new Vector3(0f, 0.06f, -0.02f), new Vector3(4.42f, 0.12f, 1.12f));
-            for (int i = 0; i < 3; i++)
-                B.Sprite("Icon" + i, t, _sFruit[i], new Vector3(-1.3f + i * 1.3f, 0.55f, -0.56f), 0.2f, false, 0);
-
-            // Striped skirt on the customer side + end caps.
-            B.Box("Skirt", t, _mAwning, new Vector3(0f, 0.62f, -0.56f), new Vector3(4.42f, 0.7f, 0.04f));
-            B.Box("CapL", t, _mRed, new Vector3(-2.22f, 0.55f, 0f), new Vector3(0.12f, 1.02f, 1.14f));
-            B.Box("CapR", t, _mRed, new Vector3(2.22f, 0.55f, 0f), new Vector3(0.12f, 1.02f, 1.14f));
-
-            // Sandwich-board sign beside the stand, facing the street.
-            var sign = B.Node("Sign", t, new Vector3(-3.35f, 0f, -0.9f), new Vector3(0f, 15f, 0f));
-            B.Box("Board", sign.transform, _mWhite, new Vector3(0f, 1.05f, 0f), new Vector3(1.6f, 1.1f, 0.1f), new Vector3(-10f, 0f, 0f));
-            B.Box("Frame", sign.transform, _mRed, new Vector3(0f, 1.05f, 0.02f), new Vector3(1.72f, 1.22f, 0.08f), new Vector3(-10f, 0f, 0f));
-            B.Box("LegL", sign.transform, _mDark, new Vector3(-0.7f, 0.5f, 0.12f), new Vector3(0.08f, 1f, 0.08f));
-            B.Box("LegR", sign.transform, _mDark, new Vector3(0.7f, 0.5f, 0.12f), new Vector3(0.08f, 1f, 0.08f));
-            var txt = B.Text("Title", sign.transform, "FRESH\nJUICE", 3.6f, new Color(1f, 0.55f, 0.1f), new Vector3(0f, 1.08f, -0.08f));
-            txt.transform.localRotation = Quaternion.Euler(-10f, 0f, 0f);
-            txt.textWrappingMode = TMPro.TextWrappingModes.Normal;
-            txt.lineSpacing = -20f;
-            txt.rectTransform.sizeDelta = new Vector2(1.5f, 1f);
-
-            B.Prop("Market/cash-register", t, new Vector3(1.6f, 1.08f, 0.05f), 0.9f, 180f);
-
-            var display = B.Node("Display", t, new Vector3(-0.45f, 1.08f, 0f)).AddComponent<ItemPile>();
-            display.columns = 6;
-            display.rows = 2;
-            display.layers = 2;
-            display.spacing = new Vector2(0.36f, 0.42f);
-            display.layerHeight = 0.37f;
-
-            var col = root.AddComponent<BoxCollider>();
-            col.center = new Vector3(0f, 0.6f, 0f);
-            col.size = new Vector3(4.6f, 1.2f, 1.3f);
-
-            var c = root.AddComponent<Counter>();
-            c.display = display;
-            c.servePoint = B.Node("ServePoint", t, new Vector3(0f, 0f, -1.35f)).transform;
-            var dz = MakeZone<DropZone>("StockZone", t, pos + new Vector3(0f, 0f, 1.65f), new Vector2(3.4f, 1.5f), _mPadCounter, _sJuice);
-            dz.receiverBehaviour = c;
-            c.dropZone = dz;
-            return c;
-        }
 
         static CashPile BuildCashPile(Vector3 pos)
         {
@@ -650,13 +585,13 @@ namespace JuiceKing.EditorTools
             var cm = root.AddComponent<CustomerManager>();
             cm.counter = counter;
             cm.cash = cash;
-            Vector3[] entry = { new Vector3(-26f, 0f, -14.2f), new Vector3(-3.6f, 0f, -14.2f) };
+            Vector3[] entry = { new Vector3(-15f, 0f, -14.2f), new Vector3(-3.6f, 0f, -14.2f) };
             Vector3[] queue =
             {
                 new Vector3(0f, 0f, -8.35f), new Vector3(0f, 0f, -9.45f), new Vector3(0f, 0f, -10.55f), new Vector3(0f, 0f, -11.65f),
                 new Vector3(0f, 0f, -12.75f), new Vector3(-1.1f, 0f, -13.9f), new Vector3(-2.2f, 0f, -13.9f)
             };
-            Vector3[] exit = { new Vector3(1.6f, 0f, -9.0f), new Vector3(2.4f, 0f, -14.4f), new Vector3(26f, 0f, -14.4f) };
+            Vector3[] exit = { new Vector3(1.6f, 0f, -9.0f), new Vector3(2.4f, 0f, -14.4f), new Vector3(16f, 0f, -14.4f) };
             cm.entryPath = Points(root.transform, "Entry", entry);
             cm.queueSlots = Points(root.transform, "Queue", queue);
             cm.exitPath = Points(root.transform, "Exit", exit);
@@ -684,7 +619,7 @@ namespace JuiceKing.EditorTools
             return a;
         }
 
-        static GameObject BuildWaiter(Vector3 pos, Juicer[] juicers, Counter counter)
+        static GameObject BuildWaiter(Vector3 pos, Juicer[] juicers, Counter counter, CustomerManager customers)
         {
             var root = CharacterBase("Waiter", "Market/character-employee", out var anim, out _);
             root.transform.SetParent(_actors, false);
@@ -706,7 +641,19 @@ namespace JuiceKing.EditorTools
             ai.carrier = carrier;
             ai.juicers = juicers;
             ai.counter = counter;
+            ai.customers = customers;
             ai.idlePoint = B.Node("WaiterIdle", _actors, pos).transform;
+
+            // "Need X juice!" bubble over the head.
+            var warn = B.Node("Warn", root.transform, new Vector3(0f, 2.45f, 0f));
+            warn.AddComponent<Billboard>();
+            var bubble = _uBubbleWhite != null ? _uBubbleWhite : _sRound;
+            B.Sprite("Bg", warn.transform, bubble, new Vector3(0f, -0.05f, 0.01f), SpriteScale(bubble, 1.35f), false, 20);
+            var warnIcon = _uWarning != null ? _uWarning : _sStar;
+            B.Sprite("Warn", warn.transform, warnIcon, new Vector3(-0.3f, 0.04f, 0f), SpriteScale(warnIcon, 0.42f), false, 21);
+            var fruit = B.Sprite("Fruit", warn.transform, _sFruit[0], new Vector3(0.28f, 0.04f, 0f), SpriteScale(_sFruit[0], 0.46f), false, 21);
+            ai.warnBubble = warn;
+            ai.warnFruit = fruit;
             SetLayerRecursive(root, 2);
             root.SetActive(false);
             return root;
@@ -762,39 +709,6 @@ namespace JuiceKing.EditorTools
 
         // ================================================================== unlock pads
 
-        static UnlockZone Unlock(string id, string title, int price, Vector3 pos, Sprite icon, GameObject[] reveal, params UnlockZone[] next)
-        {
-            var go = B.Node("Unlock_" + id, _unlocks, pos);
-            var size = new Vector2(2.4f, 2.4f);
-            var pad = B.Node("Pad", go.transform, new Vector3(0f, 0.04f, 0f), null, new Vector3(size.x, 1f, size.y));
-            B.Decal("Frame", pad.transform, _mPadUnlock, Vector3.zero, Vector2.one);
-            var fill = B.MeshObj("Fill", pad.transform, _quadXZ, _mPadFill, new Vector3(0f, 0.004f, -0.5f), new Vector3(0.9f, 1f, 0.0001f), null, false);
-
-            var label = B.Node("Label", go.transform, new Vector3(0f, 1.1f, 0f));
-            label.AddComponent<Billboard>();
-            var bg = B.Sprite("Bg", label.transform, _sRound, new Vector3(0f, 0.05f, 0.02f), 1f, false, 4, new Color(0f, 0f, 0f, 0.45f));
-            bg.drawMode = SpriteDrawMode.Sliced;
-            bg.size = new Vector2(2.1f, 0.8f);
-            var ic = B.Sprite("Icon", label.transform, icon, new Vector3(-0.62f, 0.05f, 0f), 0.22f, false, 5);
-            var priceT = B.Text("Price", label.transform, "$" + price, 6.5f, Color.white, new Vector3(0.28f, 0.07f, 0f));
-            var titleT = B.Text("Title", label.transform, title, 3.6f, new Color(1f, 0.95f, 0.7f), new Vector3(0f, -0.6f, 0f));
-
-            var z = go.AddComponent<UnlockZone>();
-            z.id = id;
-            z.title = title;
-            z.price = price;
-            z.size = size;
-            z.padVisual = pad.transform;
-            z.reveal = reveal;
-            z.next = next;
-            z.priceText = priceT;
-            z.titleText = titleT;
-            z.fill = fill.transform;
-            z.icon = ic;
-            _zones.Add(z);
-            return z;
-        }
-
         // ================================================================== decor
 
         static void BuildDecor()
@@ -808,9 +722,10 @@ namespace JuiceKing.EditorTools
             string[] flowers = { "Nature/flower_redA", "Nature/flower_yellowA", "Nature/flower_purpleA", "Nature/flower_redB", "Nature/flower_yellowB" };
             string[] rocks = { "Survival/rock-a", "Survival/rock-b", "Survival/rock-c", "Nature/rock_smallA", "Nature/rock_smallB" };
 
-            var treesRoot = B.Node("Trees", _decor, Vector3.zero).transform;
+            var treesRoot = B.Node("Trees", _nature, Vector3.zero).transform;
             void Tree(Vector3 p)
             {
+                if (InReserved(p)) return;
                 string m = trees[_rnd.Next(trees.Length)];
                 float s = 2.8f + (float)_rnd.NextDouble() * 0.9f;
                 B.Prop(m, treesRoot, p, s, (float)_rnd.NextDouble() * 360f);
@@ -834,7 +749,7 @@ namespace JuiceKing.EditorTools
             for (float x = -30f; x <= 30f; x += 3.2f)
                 Tree(new Vector3(x + (float)_rnd.NextDouble(), 0f, -23f - (float)_rnd.NextDouble() * 2f));
 
-            var small = B.Node("Plants", _decor, Vector3.zero).transform;
+            var small = B.Node("Plants", _nature, Vector3.zero).transform;
             Vector3[] bushSpots =
             {
                 new Vector3(-11.6f, 0, -11.5f), new Vector3(11.6f, 0, -11.5f), new Vector3(-11.8f, 0, -2f), new Vector3(11.8f, 0, -2.5f),
@@ -842,9 +757,12 @@ namespace JuiceKing.EditorTools
                 new Vector3(-3.2f, 0, 12.2f), new Vector3(3.2f, 0, 12.2f), new Vector3(-11f, 0, 7f), new Vector3(11f, 0, 8f)
             };
             foreach (var p in bushSpots)
+            {
+                if (InReserved(p)) continue;
                 B.Prop(bushes[_rnd.Next(bushes.Length)], small, p, 2.6f + (float)_rnd.NextDouble(), (float)_rnd.NextDouble() * 360f);
+            }
 
-            for (int i = 0; i < 70; i++)
+            for (int i = 0; i < 110; i++)
             {
                 Vector3 p;
                 int guard = 0;
@@ -852,12 +770,15 @@ namespace JuiceKing.EditorTools
                 {
                     p = new Vector3(((float)_rnd.NextDouble() - 0.5f) * 25f, 0f, -12f + (float)_rnd.NextDouble() * 32f);
                 } while (IsBusy(p) && ++guard < 30);
-                if (guard >= 30) continue;
-                B.Prop(flowers[_rnd.Next(flowers.Length)], small, p, 1.5f + (float)_rnd.NextDouble() * 0.7f, (float)_rnd.NextDouble() * 360f);
+                if (guard >= 30 || InReserved(p)) continue;
+                var fl = B.Prop(flowers[_rnd.Next(flowers.Length)], small, p, 1.6f + (float)_rnd.NextDouble() * 0.8f, (float)_rnd.NextDouble() * 360f);
+                B.NoShadows(fl);
+                Sway(fl.transform, 7f, 2f + (float)_rnd.NextDouble());
             }
             for (int i = 0; i < 10; i++)
             {
                 Vector3 p = new Vector3((_rnd.Next(2) == 0 ? -1 : 1) * (10.8f + (float)_rnd.NextDouble() * 1.5f), 0f, -10f + (float)_rnd.NextDouble() * 28f);
+                if (InReserved(p)) continue;
                 B.Prop(rocks[_rnd.Next(rocks.Length)], small, p, 1.2f + (float)_rnd.NextDouble() * 0.8f, (float)_rnd.NextDouble() * 360f);
             }
 
@@ -866,10 +787,7 @@ namespace JuiceKing.EditorTools
                 B.Prop("Furniture/lampRoundFloor", _decor, new Vector3(x + 5f, 0.06f, -15.1f), 0.28f);
 
             // Crates / barrels near the juicers for a workshop vibe.
-            B.Prop("Survival/barrel", _decor, new Vector3(-7.6f, 0f, -1.5f), 2.4f, 20f);
-            B.Prop("Survival/box", _decor, new Vector3(-7.9f, 0f, 0.2f), 2.6f, 10f);
-            B.Prop("Survival/box-large", _decor, new Vector3(7.8f, 0f, 0.2f), 2.4f, -15f);
-            B.Prop("Survival/barrel", _decor, new Vector3(7.5f, 0f, -1.6f), 2.4f, 0f);
+            B.Prop("Survival/box", _decor, new Vector3(-11.3f, 0f, 0.6f), 2.6f, 10f);
             B.Prop("Survival/signpost", _decor, new Vector3(2.8f, 0f, 9.8f), 2.6f, 200f);
         }
 
@@ -889,21 +807,69 @@ namespace JuiceKing.EditorTools
         {
             PlayerSettings.productName = "Juice King Tycoon";
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = false;
+            PlayerSettings.allowedAutorotateToLandscapeRight = false;
             PlayerSettings.runInBackground = true;
+            PlayerSettings.gcIncremental = true;
+            PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
+            PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.iOS, ScriptingImplementation.IL2CPP);
+            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
+            PlayerSettings.SetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget.Android, ManagedStrippingLevel.Low);
+            PlayerSettings.SetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget.iOS, ManagedStrippingLevel.Low);
+            EditorSettings.spritePackerMode = SpritePackerMode.SpriteAtlasV2;
+            BuildSpriteAtlas();
 
+            // PC_RPAsset = editor / desktop (Standalone). Mobile_RPAsset = Android, iOS and WebGL.
             foreach (var guid in AssetDatabase.FindAssets("t:UniversalRenderPipelineAsset"))
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
                 var asset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(path);
                 if (asset == null) continue;
+                bool mobile = path.Contains("Mobile");
                 var so = new SerializedObject(asset);
-                SetProp(so, "m_ShadowDistance", 45f);
+                SetProp(so, "m_ShadowDistance", mobile ? 32f : 45f);
                 SetProp(so, "m_SoftShadowsSupported", true);
-                SetProp(so, "m_MainLightShadowmapResolution", 2048);
+                SetProp(so, "m_MainLightShadowmapResolution", mobile ? 1024 : 2048);
                 SetProp(so, "m_ShadowCascadeCount", 1);
-                SetProp(so, "m_MSAA", 4);
-                SetProp(so, "m_SupportsHDR", true);
+                SetProp(so, "m_MSAA", mobile ? 2 : 4);
+                SetProp(so, "m_SupportsHDR", !mobile);
+                SetProp(so, "m_RenderScale", mobile ? 0.9f : 1f);
+                SetProp(so, "m_AdditionalLightsRenderingMode", mobile ? 0 : 1);
+                SetProp(so, "m_RequireDepthTexture", false);
+                SetProp(so, "m_RequireOpaqueTexture", false);
                 so.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        /// <summary>Pack every UI / icon sprite into one atlas so the canvas batches into a few draw calls.</summary>
+        static void BuildSpriteAtlas()
+        {
+            const string path = "Assets/Game/Generated/UIAtlas.spriteatlasv2";
+            try
+            {
+                if (!System.IO.File.Exists(path))
+                {
+                    var atlas = new UnityEditor.U2D.SpriteAtlasAsset();
+                    atlas.Add(new Object[]
+                    {
+                        AssetDatabase.LoadAssetAtPath<Object>(UIAtlasCutter.OutDir.TrimEnd('/')),
+                        AssetDatabase.LoadAssetAtPath<Object>(ArtGen.Dir.TrimEnd('/')),
+                    });
+                    UnityEditor.U2D.SpriteAtlasAsset.Save(atlas, path);
+                    AssetDatabase.ImportAsset(path);
+                }
+                var imp = (UnityEditor.U2D.SpriteAtlasImporter)AssetImporter.GetAtPath(path);
+                if (imp != null)
+                {
+                    imp.packingSettings = new UnityEditor.U2D.SpriteAtlasPackingSettings { enableRotation = false, enableTightPacking = false, padding = 4 };
+                    imp.textureSettings = new UnityEditor.U2D.SpriteAtlasTextureSettings { filterMode = FilterMode.Bilinear, generateMipMaps = false, sRGB = true };
+                    imp.includeInBuild = true;
+                    imp.SaveAndReimport();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[JuiceKing] Sprite atlas not created: " + e.Message);
             }
         }
 

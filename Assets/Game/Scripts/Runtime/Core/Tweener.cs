@@ -42,6 +42,38 @@ namespace JuiceKing
             public bool dead;
             // Returns true when finished.
             public abstract bool Step(float t);
+
+            /// <summary>Clear references so pooled tweens do not keep objects or closures alive.</summary>
+            public virtual void Reset()
+            {
+                target = null;
+                onComplete = null;
+                duration = time = delay = 0f;
+                channel = 0;
+                requiresTarget = true;
+                dead = false;
+            }
+
+            public abstract void Release();
+        }
+
+        /// <summary>Per-type free list: tweens are recycled instead of allocated for every arc / punch / delay.</summary>
+        static class Pool<T> where T : TweenBase, new()
+        {
+            static readonly Stack<T> Free = new Stack<T>(64);
+
+            public static T Get()
+            {
+                var t = Free.Count > 0 ? Free.Pop() : new T();
+                t.Reset();
+                return t;
+            }
+
+            public static void Put(T t)
+            {
+                t.Reset();
+                if (Free.Count < 512) Free.Push(t);
+            }
         }
 
         class ArcTween : TweenBase
@@ -54,6 +86,17 @@ namespace JuiceKing
             public Func<Quaternion> endRot;
             public Vector3 startScale, endScale;
             public bool scale;
+
+            public override void Reset()
+            {
+                base.Reset();
+                end = null;
+                endRot = null;
+                scale = false;
+                height = 0f;
+            }
+
+            public override void Release() => Pool<ArcTween>.Put(this);
 
             public override bool Step(float t)
             {
@@ -72,6 +115,7 @@ namespace JuiceKing
         {
             public Vector3 from, to;
             public Func<float, float> ease;
+            public override void Release() => Pool<ScaleTween>.Put(this);
             public override bool Step(float t)
             {
                 target.localScale = Vector3.LerpUnclamped(from, to, ease(t));
@@ -83,6 +127,7 @@ namespace JuiceKing
         {
             public Vector3 baseScale;
             public float amount;
+            public override void Release() => Pool<PunchTween>.Put(this);
             public override bool Step(float t)
             {
                 float s = Mathf.Sin(t * Mathf.PI * 3f) * (1f - t) * amount;
@@ -96,6 +141,7 @@ namespace JuiceKing
         {
             public Vector3 basePos;
             public float amount;
+            public override void Release() => Pool<ShakeTween>.Put(this);
             public override bool Step(float t)
             {
                 float a = amount * (1f - t);
@@ -109,6 +155,7 @@ namespace JuiceKing
         {
             public Vector3 from, to;
             public Func<float, float> ease;
+            public override void Release() => Pool<LocalMoveTween>.Put(this);
             public override bool Step(float t)
             {
                 target.localPosition = Vector3.LerpUnclamped(from, to, ease(t));
@@ -119,6 +166,13 @@ namespace JuiceKing
         class ActionTween : TweenBase
         {
             public Action<float> update;
+            public override void Release() => Pool<ActionTween>.Put(this);
+
+            public override void Reset()
+            {
+                base.Reset();
+                update = null;
+            }
             public override bool Step(float t)
             {
                 update(t);
@@ -159,6 +213,7 @@ namespace JuiceKing
                 if (tw.dead || (tw.requiresTarget && tw.target == null))
                 {
                     _tweens.RemoveAt(i);
+                    tw.Release();
                     continue;
                 }
 
@@ -178,7 +233,9 @@ namespace JuiceKing
                 {
                     tw.dead = true;
                     _tweens.RemoveAt(i);
-                    tw.onComplete?.Invoke();
+                    var cb = tw.onComplete;
+                    tw.Release();
+                    cb?.Invoke();
                 }
             }
         }
@@ -199,18 +256,28 @@ namespace JuiceKing
                 if (list[i].target == target && (channel < 0 || list[i].channel == channel)) list[i].dead = true;
             list = _instance._adding;
             for (int i = list.Count - 1; i >= 0; i--)
-                if (list[i].target == target && (channel < 0 || list[i].channel == channel)) list.RemoveAt(i);
+                if (list[i].target == target && (channel < 0 || list[i].channel == channel))
+                {
+                    var tw = list[i];
+                    list.RemoveAt(i);
+                    tw.Release();
+                }
         }
 
         /// <summary>Parabolic jump from the current position to a (possibly moving) world target.</summary>
         public static void Arc(Transform t, Func<Vector3> end, float height, float duration, Action onComplete = null,
             Func<Quaternion> endRot = null, Vector3? endScale = null, float delay = 0f)
         {
-            var tw = new ArcTween
-            {
-                target = t, start = t.position, end = end, height = height, duration = duration,
-                onComplete = onComplete, startRot = t.rotation, endRot = endRot, delay = delay, channel = 0
-            };
+            var tw = Pool<ArcTween>.Get();
+            tw.target = t;
+            tw.start = t.position;
+            tw.end = end;
+            tw.height = height;
+            tw.duration = duration;
+            tw.onComplete = onComplete;
+            tw.startRot = t.rotation;
+            tw.endRot = endRot;
+            tw.delay = delay;
             if (endScale.HasValue)
             {
                 tw.scale = true;
@@ -223,11 +290,14 @@ namespace JuiceKing
 
         public static void ArcTo(Transform t, Vector3 end, float height, float duration, Action onComplete = null, float delay = 0f)
         {
-            var tw = new ArcTween
-            {
-                target = t, start = t.position, fixedEnd = end, height = height, duration = duration,
-                onComplete = onComplete, delay = delay, channel = 0
-            };
+            var tw = Pool<ArcTween>.Get();
+            tw.target = t;
+            tw.start = t.position;
+            tw.fixedEnd = end;
+            tw.height = height;
+            tw.duration = duration;
+            tw.onComplete = onComplete;
+            tw.delay = delay;
             Add(tw, true);
         }
 
@@ -235,51 +305,77 @@ namespace JuiceKing
             Action onComplete = null, float delay = 0f)
         {
             t.localScale = from;
-            Add(new ScaleTween
-            {
-                target = t, from = from, to = to, duration = duration, ease = ease ?? Ease.OutBack,
-                onComplete = onComplete, delay = delay, channel = 1
-            }, true);
+            var tw = Pool<ScaleTween>.Get();
+            tw.target = t;
+            tw.from = from;
+            tw.to = to;
+            tw.duration = duration;
+            tw.ease = ease ?? Ease.OutBack;
+            tw.onComplete = onComplete;
+            tw.delay = delay;
+            tw.channel = 1;
+            Add(tw, true);
         }
 
         public static void Punch(Transform t, float amount = 0.2f, float duration = 0.3f, Vector3? baseScale = null)
         {
-            Add(new PunchTween
-            {
-                target = t, baseScale = baseScale ?? t.localScale, amount = amount, duration = duration, channel = 1
-            }, true);
+            var tw = Pool<PunchTween>.Get();
+            tw.target = t;
+            tw.baseScale = baseScale ?? t.localScale;
+            tw.amount = amount;
+            tw.duration = duration;
+            tw.channel = 1;
+            Add(tw, true);
         }
 
         public static void Shake(Transform t, float amount = 0.08f, float duration = 0.2f, Vector3? basePos = null)
         {
-            Add(new ShakeTween
-            {
-                target = t, basePos = basePos ?? t.localPosition, amount = amount, duration = duration, channel = 0
-            }, true);
+            var tw = Pool<ShakeTween>.Get();
+            tw.target = t;
+            tw.basePos = basePos ?? t.localPosition;
+            tw.amount = amount;
+            tw.duration = duration;
+            Add(tw, true);
         }
 
         public static void MoveLocal(Transform t, Vector3 to, float duration, Func<float, float> ease = null, Action onComplete = null, float delay = 0f)
         {
-            Add(new LocalMoveTween
-            {
-                target = t, from = t.localPosition, to = to, duration = duration, ease = ease ?? Ease.OutQuad,
-                onComplete = onComplete, delay = delay, channel = 0
-            }, true);
+            var tw = Pool<LocalMoveTween>.Get();
+            tw.target = t;
+            tw.from = t.localPosition;
+            tw.to = to;
+            tw.duration = duration;
+            tw.ease = ease ?? Ease.OutQuad;
+            tw.onComplete = onComplete;
+            tw.delay = delay;
+            Add(tw, true);
         }
 
         /// <summary>Generic value tween. Pass an owner transform so it dies with it (or null to run always).</summary>
         public static void Value(Transform owner, float duration, Action<float> update, Action onComplete = null, float delay = 0f)
         {
-            Add(new ActionTween
-            {
-                target = owner, requiresTarget = owner != null, duration = duration, update = update,
-                onComplete = onComplete, delay = delay, channel = 3
-            }, false);
+            var tw = Pool<ActionTween>.Get();
+            tw.target = owner;
+            tw.requiresTarget = owner != null;
+            tw.duration = duration;
+            tw.update = update;
+            tw.onComplete = onComplete;
+            tw.delay = delay;
+            tw.channel = 3;
+            Add(tw, false);
         }
+
+        static readonly Action<float> Noop = _ => { };
 
         public static void Delay(float seconds, Action action)
         {
-            Add(new ActionTween { target = null, requiresTarget = false, duration = seconds, update = _ => { }, onComplete = action, channel = 3 }, false);
+            var tw = Pool<ActionTween>.Get();
+            tw.requiresTarget = false;
+            tw.duration = seconds;
+            tw.update = Noop;
+            tw.onComplete = action;
+            tw.channel = 3;
+            Add(tw, false);
         }
     }
 }

@@ -54,6 +54,20 @@ namespace JuiceKing
             }
         }
 
+        public static int TotalCount => _i != null ? _i.zones.Length : 0;
+
+        public static int UnlockedCount
+        {
+            get
+            {
+                if (_i == null) return 0;
+                int n = 0;
+                foreach (var z in _i.zones)
+                    if (z != null && z.IsUnlocked) n++;
+                return n;
+            }
+        }
+
         public static UnlockZone FirstAvailable()
         {
             if (_i == null) return null;

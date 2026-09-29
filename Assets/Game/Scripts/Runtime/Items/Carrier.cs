@@ -22,10 +22,18 @@ namespace JuiceKing
         public float swayAmount = 0.07f;
 
         public readonly List<StackItem> items = new List<StackItem>(32);
+
+        /// <summary>Only pick up items that pass this (null = anything). Helpers use it to stick to one job.</summary>
+        [NonSerialized] public Predicate<ItemType> pickupFilter;
+        /// <summary>Stop picking up at this many matching items (-1 = no limit besides capacity).</summary>
+        [NonSerialized] public int maxPickup = -1;
         public event Action OnChanged;
 
         Vector3 _lastPos;
         Vector3 _sway, _swayVel;
+        float _bounce;
+        Vector3 _rootBase;
+        bool _rootBaseSet;
 
         public int Count => items.Count;
         public bool IsFull => items.Count >= capacity;
@@ -76,7 +84,10 @@ namespace JuiceKing
             {
                 item.inTransit = false;
                 item.transform.localRotation = Quaternion.identity;
-                if (playSound && isPlayer) Sfx.Play(SfxId.Pop, 0.35f, 1f + Mathf.Min(items.Count, 30) * 0.02f);
+                // Little squash on landing makes the stack feel soft.
+                Tweener.Punch(item.transform, 0.25f, 0.2f, Vector3.one);
+                _bounce = Mathf.Max(_bounce, 1f);
+                if (playSound && isPlayer) Sfx.Play(SfxId.Pop, 0.32f, 1f + Mathf.Min(items.Count, 30) * 0.025f);
             }, () => stackRoot.rotation);
             OnChanged?.Invoke();
         }
@@ -150,6 +161,19 @@ namespace JuiceKing
             _swayVel += (target - _sway) * (90f * dt);
             _swayVel *= Mathf.Exp(-9f * dt);
             _sway += _swayVel * dt;
+
+            // Springy bounce of the whole stack whenever something lands on it.
+            if (!_rootBaseSet)
+            {
+                _rootBase = stackRoot.localScale;
+                _rootBaseSet = true;
+            }
+            if (_bounce > 0f)
+            {
+                _bounce = Mathf.Max(0f, _bounce - dt * 5f);
+                float b = Mathf.Sin((1f - _bounce) * Mathf.PI * 3f) * _bounce * 0.08f;
+                stackRoot.localScale = new Vector3(_rootBase.x * (1f + b), _rootBase.y * (1f - b), _rootBase.z * (1f + b));
+            }
 
             float k = 1f - Mathf.Exp(-22f * dt);
             for (int i = 0; i < items.Count; i++)

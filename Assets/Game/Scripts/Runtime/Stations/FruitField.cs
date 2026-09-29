@@ -8,6 +8,16 @@ namespace JuiceKing
         public FruitKind kind;
         public Transform idlePoint;
 
+        void OnEnable()
+        {
+            if (GameManager.I != null) GameManager.I.RegisterField(kind);
+        }
+
+        void OnDisable()
+        {
+            if (GameManager.I != null) GameManager.I.UnregisterField(kind);
+        }
+
         public FruitNode NearestReady(Vector3 from)
         {
             FruitNode best = null;

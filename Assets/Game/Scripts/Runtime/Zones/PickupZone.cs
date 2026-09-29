@@ -24,6 +24,9 @@ namespace JuiceKing
             {
                 timer -= interval;
                 if (Source.Available <= 0) break;
+                var type = Source.OutputType;
+                if (c.pickupFilter != null && !c.pickupFilter(type)) break;
+                if (c.maxPickup >= 0 && c.CountOf(t => t == type) >= c.maxPickup) break;
                 if (c.IsFull)
                 {
                     c.NotifyFull();

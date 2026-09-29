@@ -40,7 +40,11 @@ namespace JuiceKing
                     }
                     var bill = GameRefs.I.SpawnItem(ItemType.Money, from, Quaternion.Euler(0f, Random.Range(-20f, 20f), 0f));
                     bill.value = value;
-                    pile.Add(bill, 1.6f, 0.4f, () => Sfx.Play(SfxId.Coin, 0.15f, 0.9f));
+                    pile.Add(bill, 1.6f, 0.4f, () =>
+                    {
+                        Sfx.Play(SfxId.Coin, 0.13f, 0.9f);
+                        Fx.Glint(bill.transform.position + Vector3.up * 0.15f, new Color(0.8f, 1f, 0.8f), 1);
+                    });
                 });
             }
         }

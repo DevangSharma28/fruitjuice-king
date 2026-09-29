@@ -140,6 +140,62 @@ namespace JuiceKing.EditorTools
             }
         }
 
+        /// <summary>
+        /// Box with rounded vertical edges (a rounded-rectangle prism), centred on c. Smooth normals around the corners.
+        /// </summary>
+        public void RoundedBox(Vector3 c, Vector3 size, float radius, int cornerSeg, int sub)
+        {
+            float hx = size.x * 0.5f, hz = size.z * 0.5f;
+            float r = Mathf.Min(radius, Mathf.Min(hx, hz) - 0.0001f);
+            float y0 = c.y - size.y * 0.5f, y1 = c.y + size.y * 0.5f;
+            // Outline points counter-clockwise (seen from above), with outward normals.
+            var pts = new List<Vector2>();
+            var nrm = new List<Vector2>();
+            Vector2[] centres = { new Vector2(hx - r, hz - r), new Vector2(-hx + r, hz - r), new Vector2(-hx + r, -hz + r), new Vector2(hx - r, -hz + r) };
+            for (int k = 0; k < 4; k++)
+            for (int i = 0; i <= cornerSeg; i++)
+            {
+                float a = (k * 90f + i * 90f / cornerSeg) * Mathf.Deg2Rad;
+                var n = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                pts.Add(centres[k] + n * r);
+                nrm.Add(n);
+            }
+            int m = pts.Count;
+            // Side wall.
+            int start = _v.Count;
+            for (int i = 0; i <= m; i++)
+            {
+                int j = i % m;
+                Vector3 n = new Vector3(nrm[j].x, 0f, nrm[j].y);
+                float u = i / (float)m;
+                Vert(new Vector3(c.x + pts[j].x, y0, c.z + pts[j].y), n, new Vector2(u * 4f, 0f));
+                Vert(new Vector3(c.x + pts[j].x, y1, c.z + pts[j].y), n, new Vector2(u * 4f, 1f));
+            }
+            for (int i = 0; i < m; i++)
+            {
+                int a = start + i * 2, b = a + 1, cc = a + 2, d = a + 3;
+                Tri(sub, a, b, cc);
+                Tri(sub, cc, b, d);
+            }
+            // Caps (fans).
+            for (int capSide = 0; capSide < 2; capSide++)
+            {
+                bool top = capSide == 1;
+                float y = top ? y1 : y0;
+                Vector3 n = top ? Vector3.up : Vector3.down;
+                int ci = Vert(new Vector3(c.x, y, c.z), n, new Vector2(0.5f, 0.5f));
+                int first = _v.Count;
+                for (int i = 0; i < m; i++)
+                    Vert(new Vector3(c.x + pts[i].x, y, c.z + pts[i].y), n, new Vector2(0.5f + pts[i].x / size.x, 0.5f + pts[i].y / size.z));
+                for (int i = 0; i < m; i++)
+                {
+                    int a = first + i, b = first + (i + 1) % m;
+                    if (top) Tri(sub, ci, b, a);
+                    else Tri(sub, ci, a, b);
+                }
+            }
+        }
+
         public Mesh ToMesh(string name)
         {
             var m = new Mesh { name = name };

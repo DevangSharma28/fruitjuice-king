@@ -10,6 +10,9 @@ namespace JuiceKing
     {
         public Transform arrow;
         public Transform pointer;
+        [Tooltip("UI arrow clamped to the screen edge while the target is off-screen.")]
+        public RectTransform edgeArrow;
+        public RectTransform edgeArea;
         public FruitField firstField;
         public Juicer firstJuicer;
         public Counter counter;
@@ -17,10 +20,16 @@ namespace JuiceKing
 
         Carrier _player;
         Vector3 _arrowBase;
+        Vector3 _pointerScale = Vector3.one;
+        float _ringT;
+        Vector3? _lastTarget;
 
         void Start()
         {
             _player = GameRefs.I.player;
+            if (pointer != null) _pointerScale = pointer.localScale;
+            if (arrow != null) _arrowScale = arrow.localScale;
+            if (edgeArrow != null) edgeArrow.gameObject.SetActive(false);
             UnlockManager.ZoneUnlocked += OnUnlocked;
         }
 
@@ -78,6 +87,20 @@ namespace JuiceKing
                     break;
             }
 
+            // Carrying slices nobody can juice yet: point at the trash bin so the player is never stuck.
+            var bin = TrashBin.I;
+            if (bin != null && bin.isActiveAndEnabled)
+            {
+                for (int i = 0; i < _player.items.Count; i++)
+                {
+                    var t = _player.items[i].type;
+                    if (!t.IsSlice() || gm.HasJuicer(t.Fruit())) continue;
+                    text = "No " + Balance.FruitNames[(int)t.Fruit()] + " juicer yet! Toss them in the trash";
+                    target = bin.zone != null ? bin.zone.transform.position : bin.transform.position;
+                    break;
+                }
+            }
+
             if (HUD.I != null) HUD.I.SetObjective(text);
             UpdateMarkers(target);
         }
@@ -91,17 +114,37 @@ namespace JuiceKing
         void UpdateMarkers(Vector3? target)
         {
             bool has = target.HasValue;
+            float time = Time.time;
             if (arrow != null)
             {
                 if (arrow.gameObject.activeSelf != has) arrow.gameObject.SetActive(has);
                 if (has)
                 {
                     Vector3 p = target.Value;
-                    p.y = Mathf.Max(p.y, 0f) + 2.4f + Mathf.Sin(Time.time * 5f) * 0.25f;
+                    float bounce = Mathf.Abs(Mathf.Sin(time * 4f));
+                    p.y = Mathf.Max(p.y, 0f) + 2.3f + bounce * 0.55f;
                     arrow.position = p;
-                    arrow.Rotate(0f, 120f * Time.deltaTime, 0f, Space.World);
+                    arrow.Rotate(0f, 90f * Time.deltaTime, 0f, Space.World);
+                    // Squash when it "lands".
+                    float sq = 1f + (1f - bounce) * 0.12f;
+                    arrow.localScale = new Vector3(_arrowScale.x * sq, _arrowScale.y / sq, _arrowScale.z * sq);
                 }
             }
+
+            // Pulse a ring on the ground under the target so the spot itself reads, not just the arrow.
+            if (has)
+            {
+                if (!_lastTarget.HasValue || (_lastTarget.Value - target.Value).sqrMagnitude > 0.5f) _ringT = 0f;
+                _ringT -= Time.deltaTime;
+                if (_ringT <= 0f)
+                {
+                    _ringT = 1.1f;
+                    var g = target.Value;
+                    g.y = 0f;
+                    Fx.Ring(g, new Color(1f, 0.9f, 0.25f, 0.9f), 3.2f);
+                }
+            }
+            _lastTarget = target;
 
             if (pointer != null)
             {
@@ -110,15 +153,57 @@ namespace JuiceKing
                 {
                     Vector3 d = target.Value - _player.transform.position;
                     d.y = 0f;
-                    show = d.magnitude > 3.5f;
+                    show = d.magnitude > 3f;
                     if (show)
                     {
-                        pointer.position = _player.transform.position + d.normalized * 1.4f + Vector3.up * 0.06f;
+                        // Chevron slides out ahead of the player and pulses, like a "go this way" hint.
+                        float slide = Mathf.Repeat(time * 1.4f, 1f);
+                        pointer.position = _player.transform.position + d.normalized * (1.5f + slide * 0.7f) + Vector3.up * 0.09f;
                         pointer.rotation = Quaternion.LookRotation(d.normalized);
+                        float pulse = 1f + Mathf.Sin(time * 8f) * 0.06f;
+                        pointer.localScale = _pointerScale * pulse;
                     }
                 }
                 if (pointer.gameObject.activeSelf != show) pointer.gameObject.SetActive(show);
             }
+
+            UpdateEdgeArrow(target);
+        }
+
+        Vector3 _arrowScale = Vector3.one;
+
+        /// <summary>Screen-edge arrow for targets outside the view.</summary>
+        void UpdateEdgeArrow(Vector3? target)
+        {
+            if (edgeArrow == null || edgeArea == null) return;
+            var cam = GameRefs.I != null ? GameRefs.I.mainCamera : Camera.main;
+            bool show = false;
+            if (target.HasValue && cam != null)
+            {
+                Vector3 vp = cam.WorldToViewportPoint(target.Value + Vector3.up * 1f);
+                bool behind = vp.z < 0f;
+                if (behind) vp = new Vector3(1f - vp.x, 1f - vp.y, 0f);
+                const float m = 0.08f;
+                bool off = behind || vp.x < m || vp.x > 1f - m || vp.y < m + 0.05f || vp.y > 1f - m - 0.12f;
+                if (off)
+                {
+                    show = true;
+                    Vector2 c = new Vector2(0.5f, 0.5f);
+                    Vector2 dir = new Vector2(vp.x, vp.y) - c;
+                    if (dir.sqrMagnitude < 0.0001f) dir = Vector2.down;
+                    // Push the point onto the inset screen rectangle along the direction from the centre.
+                    float kx = (0.5f - m) / Mathf.Max(0.0001f, Mathf.Abs(dir.x));
+                    float ky = (0.5f - m - 0.08f) / Mathf.Max(0.0001f, Mathf.Abs(dir.y));
+                    Vector2 edge = c + dir * Mathf.Min(kx, ky);
+                    var r = edgeArea.rect;
+                    edgeArrow.anchoredPosition = new Vector2((edge.x - 0.5f) * r.width, (edge.y - 0.5f) * r.height);
+                    float ang = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg - 90f;
+                    edgeArrow.localRotation = Quaternion.Euler(0f, 0f, ang);
+                    float s = 1f + Mathf.Sin(Time.time * 7f) * 0.1f;
+                    edgeArrow.localScale = new Vector3(s, s, 1f);
+                }
+            }
+            if (edgeArrow.gameObject.activeSelf != show) edgeArrow.gameObject.SetActive(show);
         }
     }
 }

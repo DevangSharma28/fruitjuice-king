@@ -13,6 +13,8 @@ namespace JuiceKing
     public interface IItemSource
     {
         int Available { get; }
+        /// <summary>Type of item <see cref="Take"/> would hand out.</summary>
+        ItemType OutputType { get; }
         StackItem Take(Carrier to);
     }
 

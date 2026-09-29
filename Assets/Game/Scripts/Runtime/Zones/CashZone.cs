@@ -9,6 +9,7 @@ namespace JuiceKing
         public float interval = 0.025f;
 
         int _pendingText;
+        int _streak;
         float _textTimer;
 
         protected override void Awake()
@@ -32,6 +33,8 @@ namespace JuiceKing
             }
         }
 
+        protected override void OnPlayerExit() => _streak = 0;
+
         protected override float TickCarrier(Carrier c, float timer)
         {
             if (cash == null || timer < 0.1f + interval) return timer;
@@ -51,7 +54,10 @@ namespace JuiceKing
                 Tweener.Arc(bill.transform, () => target.position + Vector3.up * 1.1f, 1.2f, 0.28f, () =>
                 {
                     GameManager.I.AddMoney(value);
-                    Sfx.Play(SfxId.Coin, 0.5f, Random.Range(0.95f, 1.15f));
+                    Sfx.Play(SfxId.Coin, 0.45f, Random.Range(0.95f, 1.15f) + Mathf.Min(_streak, 20) * 0.015f);
+                    _streak++;
+                    if (HUD.I != null && (_streak % 2) == 1) HUD.I.FlyCoins(target.position + Vector3.up * 1.3f, 1);
+                    if ((_streak % 6) == 0) Fx.Coins(target.position + Vector3.up * 1.4f, 3);
                     bill.Despawn();
                 }, null, Vector3.one * 0.4f);
                 AddText(value);
