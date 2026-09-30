@@ -19,6 +19,117 @@ namespace JuiceKing.EditorTools
             TropicalSlices();
             DeliveryIcons();
             BeachTextures();
+            ShaderTextures();
+        }
+
+        // ---------------------------------------------------------------- shader textures
+
+        /// <summary>Tileable value noise in [0,1] (fBm), sampled with wrap-around.</summary>
+        static float TileNoise(float x, float y, int period, int seed)
+        {
+            float Hash(int ix, int iy)
+            {
+                ix = ((ix % period) + period) % period;
+                iy = ((iy % period) + period) % period;
+                uint h = (uint)(ix * 374761393 + iy * 668265263 + seed * 1442695041);
+                h = (h ^ (h >> 13)) * 1274126177u;
+                return (h & 0xffff) / 65535f;
+            }
+            int x0 = Mathf.FloorToInt(x), y0 = Mathf.FloorToInt(y);
+            float fx = x - x0, fy = y - y0;
+            fx = fx * fx * (3f - 2f * fx);
+            fy = fy * fy * (3f - 2f * fy);
+            float a = Mathf.Lerp(Hash(x0, y0), Hash(x0 + 1, y0), fx);
+            float b = Mathf.Lerp(Hash(x0, y0 + 1), Hash(x0 + 1, y0 + 1), fx);
+            return Mathf.Lerp(a, b, fy);
+        }
+
+        /// <summary>Tileable value noise with separate periods per axis (long streaks: many cells across, few down).</summary>
+        static float TileNoise2(float x, float y, int px, int py, int seed)
+        {
+            float Hash(int ix, int iy)
+            {
+                ix = ((ix % px) + px) % px;
+                iy = ((iy % py) + py) % py;
+                uint h = (uint)(ix * 374761393 + iy * 668265263 + seed * 1442695041);
+                h = (h ^ (h >> 13)) * 1274126177u;
+                return (h & 0xffff) / 65535f;
+            }
+            int x0 = Mathf.FloorToInt(x), y0 = Mathf.FloorToInt(y);
+            float fx = x - x0, fy = y - y0;
+            fx = fx * fx * (3f - 2f * fx);
+            fy = fy * fy * (3f - 2f * fy);
+            float a = Mathf.Lerp(Hash(x0, y0), Hash(x0 + 1, y0), fx);
+            float b = Mathf.Lerp(Hash(x0, y0 + 1), Hash(x0 + 1, y0 + 1), fx);
+            return Mathf.Lerp(a, b, fy);
+        }
+
+        static void ShaderTextures()
+        {
+            const int S = 256;
+            // Soft painterly noise for the stylized shader's detail (mid-grey +/- variation).
+            var p = new Painter(S, S, Color.gray);
+            p.ForEach((x, y, c) =>
+            {
+                float u = x / (float)S, v = y / (float)S;
+                float n = TileNoise(u * 4f, v * 4f, 4, 11) * 0.55f + TileNoise(u * 8f, v * 8f, 8, 12) * 0.3f + TileNoise(u * 16f, v * 16f, 16, 13) * 0.15f;
+                return new Color(n, n, n, 1f);
+            });
+            p.Save(Dir + "noise_soft.png", false, default, true);
+
+            // Caustics: R = web of bright cell edges (tileable Voronoi), G = blotchy noise used for sun sparkles.
+            const int cells = 6;
+            var pts = new Vector2[cells, cells];
+            var rnd = new System.Random(91);
+            for (int i = 0; i < cells; i++)
+            for (int j = 0; j < cells; j++)
+                pts[i, j] = new Vector2((i + 0.15f + (float)rnd.NextDouble() * 0.7f) / cells, (j + 0.15f + (float)rnd.NextDouble() * 0.7f) / cells);
+            p = new Painter(S, S, Color.black);
+            p.ForEach((x, y, c) =>
+            {
+                float u = x / (float)S, v = y / (float)S;
+                int ci = Mathf.FloorToInt(u * cells), cj = Mathf.FloorToInt(v * cells);
+                float f1 = 9f, f2 = 9f;
+                for (int di = -1; di <= 1; di++)
+                for (int dj = -1; dj <= 1; dj++)
+                {
+                    int ii = ci + di, jj = cj + dj;
+                    int wi = ((ii % cells) + cells) % cells, wj = ((jj % cells) + cells) % cells;
+                    var q = pts[wi, wj] + new Vector2(Mathf.Floor((float)ii / cells), Mathf.Floor((float)jj / cells));
+                    float d = (new Vector2(u, v) - q).magnitude;
+                    if (d < f1) { f2 = f1; f1 = d; }
+                    else if (d < f2) f2 = d;
+                }
+                float edge = Mathf.Clamp01(1f - (f2 - f1) * cells * 3.2f);
+                edge = edge * edge;
+                float g = TileNoise(u * 10f, v * 10f, 10, 21) * 0.7f + TileNoise(u * 20f, v * 20f, 20, 22) * 0.3f;
+                return new Color(edge, g, 0f, 1f);
+            });
+            p.Save(Dir + "caustics.png", false, default, true);
+
+            // Contact shadow: white (the material tints it) with a long soft falloff, darkest at the centre.
+            p = new Painter(128, 128, new Color(1f, 1f, 1f, 0f));
+            p.ForEach((x, y, c) =>
+            {
+                float d = Mathf.Sqrt((x - 63.5f) * (x - 63.5f) + (y - 63.5f) * (y - 63.5f)) / 63f;
+                return new Color(1f, 1f, 1f, Mathf.Pow(Mathf.Clamp01(1f - d), 1.6f));
+            });
+            p.Save(Dir + "contact_shadow.png", false);
+
+            // Waterfall: bright strands streaming down sea-green water with foamy edges. Tiles top to bottom (it scrolls).
+            p = new Painter(64, 256, Color.white);
+            var deep = new Color(0.38f, 0.78f, 0.9f);
+            var foam = new Color(0.92f, 0.99f, 1f);
+            p.ForEach((x, y, c) =>
+            {
+                float u = x / 64f, v = y / 256f;
+                float n = TileNoise2(u * 14f, v * 2f, 14, 2, 31) * 0.6f + TileNoise2(u * 28f, v * 5f, 28, 5, 32) * 0.4f;
+                float strand = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.42f, 0.8f, n));
+                float edge = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.62f, 1f, Mathf.Abs(u - 0.5f) * 2f));
+                var col = Color.Lerp(deep, foam, Mathf.Clamp01(strand * 0.85f + edge * 0.7f));
+                return new Color(col.r, col.g, col.b, 1f);
+            });
+            p.Save(Dir + "waterfall.png", false, default, true);
         }
 
         // ---------------------------------------------------------------- fruit icons
@@ -110,6 +221,10 @@ namespace JuiceKing.EditorTools
                     case FruitKind.Banana: ShakeGlass(p, jc); break;
                     case FruitKind.Mango: TallGlass(p, jc, C(1f, 0.6f, 0.15f)); break;
                     case FruitKind.Papaya: TallGlass(p, jc, C(0.55f, 0.78f, 0.28f)); break;
+                    case FruitKind.Strawberry: SmoothieGlass(p, jc); break;
+                    case FruitKind.Raspberry: MasonJar(p, jc); break;
+                    case FruitKind.Blueberry: MilkBottle(p, jc); break;
+                    case FruitKind.Cranberry: CoolerGlass(p, jc); break;
                     default: TakeawayCup(p, jc, Balance.FruitColors[k]); break;
                 }
                 p.Save(Dir + JuiceIconFile(k), true);

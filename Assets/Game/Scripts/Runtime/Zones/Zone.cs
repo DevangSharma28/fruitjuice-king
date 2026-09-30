@@ -18,6 +18,14 @@ namespace JuiceKing
         StackItem Take(Carrier to);
     }
 
+    /// <summary>A machine that makes one product (juicer, berry press, oven). Helpers fetch its output from <see cref="OutputZone"/>.</summary>
+    public interface IProducer : IItemSource
+    {
+        FruitKind Kind { get; }
+        PickupZone OutputZone { get; }
+        bool IsActive { get; }
+    }
+
     /// <summary>
     /// Rectangular floor area that reacts to carriers (player / workers) standing on it.
     /// Uses cheap distance tests instead of physics triggers.
@@ -43,6 +51,9 @@ namespace JuiceKing
 
         public bool Contains(Vector3 worldPos, float margin = 0f)
         {
+            // A pad still popping in from zero scale has a singular matrix: it must not report everyone as inside.
+            var s = transform.lossyScale;
+            if (Mathf.Abs(s.x) < 0.05f || Mathf.Abs(s.z) < 0.05f) return false;
             Vector3 l = transform.InverseTransformPoint(worldPos);
             return Mathf.Abs(l.x) <= size.x * 0.5f + margin && Mathf.Abs(l.z) <= size.y * 0.5f + margin && Mathf.Abs(l.y) < 2.5f;
         }

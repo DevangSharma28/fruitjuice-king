@@ -47,6 +47,9 @@ namespace JuiceKing
         public Color pipOff = new Color(0.8f, 0.77f, 0.72f, 1f);
         public Color tabOn = Color.white;
         public Color tabOff = new Color(0.72f, 0.68f, 0.64f, 1f);
+        [Tooltip("Window height = baseHeight + rowStep x visible rows (0 = fixed height).")]
+        public float baseHeight;
+        public float rowStep;
 
         bool _open;
         string _category;
@@ -137,6 +140,9 @@ namespace JuiceKing
             _shown.Clear();
             foreach (var d in Tree)
                 if (tabs == null || tabs.Length == 0 || d.category == category) _shown.Add(d);
+            // Fit the window to the rows this tab shows (no empty space under a 3-upgrade tab).
+            if (rowStep > 0f && window != null)
+                window.sizeDelta = new Vector2(window.sizeDelta.x, baseHeight + rowStep * Mathf.Min(_shown.Count, rows.Length));
             for (int i = 0; i < rows.Length; i++)
             {
                 var r = rows[i];

@@ -196,6 +196,68 @@ namespace JuiceKing.EditorTools
             }
         }
 
+        /// <summary>
+        /// Box with every edge and corner rounded by <paramref name="radius"/> (a "toy" block), centred on c, smooth
+        /// normals. Face grids are spaced with tan() so the rounded bands get evenly spread vertices.
+        /// </summary>
+        public void BeveledBox(Vector3 c, Vector3 size, float radius, int seg, int sub)
+        {
+            Vector3 h = size * 0.5f;
+            float r = Mathf.Clamp(radius, 0f, Mathf.Min(h.x, Mathf.Min(h.y, h.z)) * 0.98f);
+            seg = Mathf.Max(1, seg);
+            Vector3 inner = new Vector3(h.x - r, h.y - r, h.z - r);
+
+            float[] Axis(float half, float inr)
+            {
+                var list = new List<float>();
+                for (int k = seg; k >= 1; k--) list.Add(-inr - r * Mathf.Tan(k / (float)seg * Mathf.PI * 0.25f));
+                list.Add(-inr);
+                if (inr > 0.0001f) list.Add(inr);
+                for (int k = 1; k <= seg; k++) list.Add(inr + r * Mathf.Tan(k / (float)seg * Mathf.PI * 0.25f));
+                return list.ToArray();
+            }
+            float[] ax = Axis(h.x, inner.x), ay = Axis(h.y, inner.y), az = Axis(h.z, inner.z);
+
+            void FaceGrid(Vector3 n, Vector3 u, Vector3 v, float[] cu, float[] cv, float halfN, float sizeU, float sizeV)
+            {
+                int start = _v.Count;
+                for (int j = 0; j < cv.Length; j++)
+                for (int i = 0; i < cu.Length; i++)
+                {
+                    Vector3 p = n * halfN + u * cu[i] + v * cv[j];
+                    Vector3 q = new Vector3(Mathf.Clamp(p.x, -inner.x, inner.x), Mathf.Clamp(p.y, -inner.y, inner.y), Mathf.Clamp(p.z, -inner.z, inner.z));
+                    Vector3 d = p - q;
+                    Vector3 nn = d.sqrMagnitude > 1e-10f ? d.normalized : n;
+                    Vector3 pos = r > 0f ? q + nn * r : p;
+                    Vert(c + pos, nn, new Vector2(cu[i] / sizeU + 0.5f, cv[j] / sizeV + 0.5f));
+                }
+                bool ccw = Vector3.Dot(Vector3.Cross(u, v), n) > 0f;
+                int w = cu.Length;
+                for (int j = 0; j < cv.Length - 1; j++)
+                for (int i = 0; i < w - 1; i++)
+                {
+                    int a = start + j * w + i, b = a + 1, cc = a + w, d = cc + 1;
+                    if (ccw)
+                    {
+                        Tri(sub, a, b, cc);
+                        Tri(sub, b, d, cc);
+                    }
+                    else
+                    {
+                        Tri(sub, a, cc, b);
+                        Tri(sub, b, cc, d);
+                    }
+                }
+            }
+
+            FaceGrid(Vector3.right, Vector3.forward, Vector3.up, az, ay, h.x, size.z, size.y);
+            FaceGrid(Vector3.left, Vector3.back, Vector3.up, az, ay, h.x, size.z, size.y);
+            FaceGrid(Vector3.up, Vector3.right, Vector3.forward, ax, az, h.y, size.x, size.z);
+            FaceGrid(Vector3.down, Vector3.right, Vector3.back, ax, az, h.y, size.x, size.z);
+            FaceGrid(Vector3.forward, Vector3.left, Vector3.up, ax, ay, h.z, size.x, size.y);
+            FaceGrid(Vector3.back, Vector3.right, Vector3.up, ax, ay, h.z, size.x, size.y);
+        }
+
         public Mesh ToMesh(string name)
         {
             var m = new Mesh { name = name };

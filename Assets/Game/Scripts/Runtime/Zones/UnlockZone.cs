@@ -46,6 +46,7 @@ namespace JuiceKing
         float _acc;
         float _glowA = -1f;
         float _coinTimer;
+        float _glintTimer;
         float _stuckTime;
         Vector3 _baseScale;
         Vector3 _labelBase;
@@ -91,10 +92,10 @@ namespace JuiceKing
         protected override void Update()
         {
             base.Update();
+            bool afford = GameManager.I != null && GameManager.I.Money >= Remaining && Remaining > 0;
             if (glow != null)
             {
                 if (_glowA < 0f) _glowA = glow.color.a;
-                bool afford = GameManager.I != null && GameManager.I.Money >= Remaining && Remaining > 0;
                 float k = 0.65f + Mathf.Sin(Time.time * (afford ? 4.5f : 2f)) * 0.35f;
                 var c = glow.color;
                 c.a = _glowA * (afford ? Mathf.Lerp(0.8f, 1.2f, k) : Mathf.Lerp(0.45f, 0.8f, k));
@@ -105,9 +106,20 @@ namespace JuiceKing
             // Bob the price label; bob faster when the player can afford it.
             if (label != null)
             {
-                bool afford = GameManager.I != null && GameManager.I.Money >= Remaining && Remaining > 0;
                 float amp = afford ? 0.12f : 0.05f;
                 label.localPosition = _labelBase + Vector3.up * (Mathf.Sin(Time.time * (afford ? 5f : 2f)) * amp);
+            }
+            // Twinkle around the edge of a pad the player can afford, so it catches the eye from across the map.
+            if (afford && !PlayerInside)
+            {
+                _glintTimer -= Time.deltaTime;
+                if (_glintTimer <= 0f)
+                {
+                    _glintTimer = Random.Range(0.22f, 0.4f);
+                    float a = Random.value * Mathf.PI * 2f;
+                    var edge = new Vector3(Mathf.Cos(a) * size.x * 0.5f, Random.Range(0.15f, 0.6f), Mathf.Sin(a) * size.y * 0.5f);
+                    Fx.Glint(transform.TransformPoint(edge), new Color(1f, 0.93f, 0.55f), 1);
+                }
             }
         }
 

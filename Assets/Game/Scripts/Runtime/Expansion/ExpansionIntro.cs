@@ -22,6 +22,51 @@ namespace JuiceKing
             public float hold = 1.6f;
             [Tooltip("Park the demo truck at the bay while this shot is on screen.")]
             public bool showTruck;
+            [Tooltip("Locked things shown (with their scripts off) while this shot is on screen.")]
+            public GameObject[] preview;
+        }
+
+        readonly System.Collections.Generic.List<GameObject> _previewed = new System.Collections.Generic.List<GameObject>();
+        readonly System.Collections.Generic.List<Vector3> _previewScale = new System.Collections.Generic.List<Vector3>();
+        readonly System.Collections.Generic.List<MonoBehaviour> _paused = new System.Collections.Generic.List<MonoBehaviour>();
+
+        /// <summary>Pop locked stations in for the shot (scripts disabled, so nothing registers, spawns or saves).</summary>
+        void ShowPreview(GameObject[] objs)
+        {
+            HidePreview();
+            if (objs == null) return;
+            foreach (var go in objs)
+            {
+                if (go == null || go.activeSelf) continue;
+                foreach (var b in go.GetComponentsInChildren<MonoBehaviour>(true))
+                    if (b.enabled)
+                    {
+                        b.enabled = false;
+                        _paused.Add(b);
+                    }
+                go.SetActive(true);
+                _previewed.Add(go);
+                var s = go.transform.localScale;
+                _previewScale.Add(s);
+                Tweener.Scale(go.transform, Vector3.zero, s, 0.45f, Ease.OutBack);
+            }
+        }
+
+        void HidePreview()
+        {
+            for (int i = 0; i < _previewed.Count; i++)
+            {
+                var go = _previewed[i];
+                if (go == null) continue;
+                Tweener.Kill(go.transform);
+                go.transform.localScale = _previewScale[i];
+                go.SetActive(false);
+            }
+            foreach (var b in _paused)
+                if (b != null) b.enabled = true;
+            _previewed.Clear();
+            _previewScale.Clear();
+            _paused.Clear();
         }
 
         public RectTransform topBar, bottomBar;
@@ -45,17 +90,80 @@ namespace JuiceKing
 
         bool _done;
         float _barH;
+        bool _cutscene;
+        Action _onSkip;
 
         void Awake()
         {
-            if (skipButton != null) skipButton.onClick.AddListener(Finish);
+            if (skipButton != null) skipButton.onClick.AddListener(OnSkip);
             gameObject.SetActive(false);
+        }
+
+        void OnSkip()
+        {
+            if (!_cutscene)
+            {
+                Finish();
+                return;
+            }
+            var skip = _onSkip;
+            _onSkip = null;
+            skip?.Invoke();
+            EndCutscene();
+        }
+
+        // ---------------------------------------------------------------- short story beats (fox raid)
+
+        /// <summary>
+        /// Letterbox a short scripted moment (the first fox raid): bars in, HUD out, input blocked, captions via
+        /// <see cref="Caption"/>. SKIP calls <paramref name="onSkip"/> and ends it; otherwise call <see cref="EndCutscene"/>.
+        /// </summary>
+        public void BeginCutscene(Action onSkip)
+        {
+            Playing = true;
+            _done = false;
+            _cutscene = true;
+            _onSkip = onSkip;
+            gameObject.SetActive(true);
+            InputJoystick.Blocked = true;
+            _barH = topBar != null ? topBar.sizeDelta.y : 0f;
+            SlideBars(true);
+            FadeHud(false);
+            if (titleGroup != null) titleGroup.gameObject.SetActive(false);
+            if (captionGroup != null) captionGroup.gameObject.SetActive(false);
+            if (skipButton != null)
+            {
+                skipButton.gameObject.SetActive(true);
+                Tweener.Scale(skipButton.transform, Vector3.zero, Vector3.one, 0.4f, Ease.OutBack, null, 0.8f);
+            }
+        }
+
+        public void Caption(string text) => ShowCaption(text);
+
+        public void EndCutscene()
+        {
+            if (!_cutscene || _done) return;
+            _done = true;
+            _onSkip = null;
+            CameraFollow.CancelPeeks();
+            InputJoystick.Blocked = false;
+            ShowCaptionHidden();
+            if (skipButton != null) skipButton.gameObject.SetActive(false);
+            SlideBars(false);
+            FadeHud(true);
+            Tweener.Delay(0.6f, () =>
+            {
+                Playing = false;
+                _cutscene = false;
+                if (this != null && _done) gameObject.SetActive(false);
+            });
         }
 
         public void Play()
         {
             Playing = true;
             _done = false;
+            _cutscene = false;
             gameObject.SetActive(true);
             InputJoystick.Blocked = true;
             Platform.Pause("intro");
@@ -77,11 +185,16 @@ namespace JuiceKing
                     CameraFollow.Peek(s.point.position, s.hold, s.distance, () =>
                     {
                         ShowCaption(shot.caption);
+                        ShowPreview(shot.preview);
                         if (shot.showTruck) ShowDemoTruck(true);
                     }, null, 1.1f, 0.9f);
                 }
             // A last beat on the player before control returns.
-            CameraFollow.Peek(GameRefs.I.player.transform.position, 0.2f, 1f, () => ShowCaption(null), Finish, 1f, 0.3f);
+            CameraFollow.Peek(GameRefs.I.player.transform.position, 0.2f, 1f, () =>
+            {
+                ShowCaption(null);
+                HidePreview();
+            }, Finish, 1f, 0.3f);
         }
 
         void ShowTitle()
@@ -138,6 +251,7 @@ namespace JuiceKing
             Platform.Resume("intro");
             HideTitle();
             ShowCaptionHidden();
+            HidePreview();
             ShowDemoTruck(false);
             if (skipButton != null) skipButton.gameObject.SetActive(false);
             SlideBars(false);

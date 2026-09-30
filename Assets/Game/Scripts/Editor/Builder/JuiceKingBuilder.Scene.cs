@@ -43,6 +43,7 @@ namespace JuiceKing.EditorTools
             BuildCustomerPrefabs();
             BuildScene();
             BuildTropicalScene();
+            BuildBerryScene();
             BuildBootScene();
             ConfigureProject();
             AssetDatabase.SaveAssets();
@@ -62,6 +63,7 @@ namespace JuiceKing.EditorTools
             BuildCustomerPrefabs();
             BuildScene();
             BuildTropicalScene();
+            BuildBerryScene();
             BuildBootScene();
             SetBuildScenes();
             AssetDatabase.SaveAssets();
@@ -91,6 +93,38 @@ namespace JuiceKing.EditorTools
             return "ok";
         }
 
+        [MenuItem("Juice King/Rebuild Berry Scene", priority = 3)]
+        public static void RebuildBerryOnly()
+        {
+            _controller = KenneyImport.BuildController();
+            KenneyImport.TintNature();
+            BuildFont();
+            BuildMeshes();
+            BuildMaterials();
+            BuildItemPrefabs();
+            BuildCustomerPrefabs();
+            BuildBerryScene();
+            SetBuildScenes();
+            AssetDatabase.SaveAssets();
+            Debug.Log("[JuiceKing] Berry rebuilt: " + BerryScenePath);
+        }
+
+        public static string RunBerryOnly()
+        {
+            RebuildBerryOnly();
+            return "ok";
+        }
+
+        /// <summary>Golden Apple, fox and cake art every world's GameRefs carries (premium currency is global).</summary>
+        static void AssignPremiumRefs(GameRefs refs)
+        {
+            refs.appleIcon = _sApple;
+            refs.foxIcon = _sFox;
+            refs.cakeIcons = (Sprite[])_sCakeIcons.Clone();
+            refs.batterPrefabs = _batterPrefabs;
+            refs.cakePrefabs = _cakePrefabs;
+        }
+
         /// <summary>Build order: the Boot loading screen first, then the worlds (loaded by name).</summary>
         static void SetBuildScenes()
         {
@@ -98,6 +132,7 @@ namespace JuiceKing.EditorTools
             if (System.IO.File.Exists(BootScenePath)) list.Add(new EditorBuildSettingsScene(BootScenePath, true));
             list.Add(new EditorBuildSettingsScene(ScenePath, true));
             list.Add(new EditorBuildSettingsScene(TropicalScenePath, true));
+            if (System.IO.File.Exists(BerryScenePath)) list.Add(new EditorBuildSettingsScene(BerryScenePath, true));
             EditorBuildSettings.scenes = list.ToArray();
         }
 
@@ -273,6 +308,7 @@ namespace JuiceKing.EditorTools
             refs.juiceIcons = (Sprite[])_sJuiceIcons.Clone();
             UpgradeIconTable(out refs.upgradeIconKeys, out refs.upgradeIconSprites);
             refs.moneyIcon = _sMoney;
+            AssignPremiumRefs(refs);
             refs.particleMaterial = _mParticle;
             refs.fxMaterials = _mFx;
             refs.font = B.Font;
@@ -292,6 +328,7 @@ namespace JuiceKing.EditorTools
             BuildButterflies();
             BuildClouds();
             BuildGroundCover();
+            PolishClassic();
             OptimizeScene("JuiceKing");
             // Static-batch the scenery; animated decor (swayers, spinners, critters) is un-flagged below.
             MarkStatic(_decor.gameObject);
@@ -355,15 +392,15 @@ namespace JuiceKing.EditorTools
 
         // ================================================================== lighting, ground, camera
 
-        static void BuildLighting(bool tropical = false)
+        static void BuildLighting(bool tropical = false, bool berry = false)
         {
             var sun = new GameObject("Sun");
             var l = sun.AddComponent<Light>();
             l.type = LightType.Directional;
-            l.color = tropical ? new Color(1f, 0.91f, 0.76f) : new Color(1f, 0.93f, 0.8f);
-            l.intensity = tropical ? 1.4f : 1.3f;
+            l.color = berry ? new Color(1f, 0.9f, 0.8f) : tropical ? new Color(1f, 0.91f, 0.76f) : new Color(1f, 0.93f, 0.8f);
+            l.intensity = berry ? 1.35f : tropical ? 1.4f : 1.3f;
             l.shadows = LightShadows.Soft;
-            l.shadowStrength = 0.5f;
+            l.shadowStrength = 0.68f;
             sun.transform.rotation = Quaternion.Euler(48f, -32f, 0f);
 
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -382,6 +419,18 @@ namespace JuiceKing.EditorTools
                 RenderSettings.ambientEquatorColor = new Color(0.78f, 0.8f, 0.68f);
                 RenderSettings.ambientGroundColor = new Color(0.62f, 0.55f, 0.42f);
             }
+            if (berry)
+            {
+                // Soft afternoon light with a hint of pink in the shade and a lavender haze in the distance.
+                sun.transform.rotation = Quaternion.Euler(50f, -38f, 0f);
+                // Bright and fresh: greener bounce light, and the haze only far away so the meadow keeps its colour.
+                RenderSettings.ambientSkyColor = new Color(0.86f, 0.9f, 1f);
+                RenderSettings.ambientEquatorColor = new Color(0.84f, 0.88f, 0.76f);
+                RenderSettings.ambientGroundColor = new Color(0.62f, 0.58f, 0.46f);
+                RenderSettings.fogColor = new Color(0.86f, 0.88f, 0.96f);
+                RenderSettings.fogStartDistance = 58f;
+                RenderSettings.fogEndDistance = 120f;
+            }
             RenderSettings.sun = l;
 
             // Post processing.
@@ -389,19 +438,23 @@ namespace JuiceKing.EditorTools
             var tone = profile.Add<Tonemapping>(true);
             tone.mode.Override(TonemappingMode.Neutral);
             var ca = profile.Add<ColorAdjustments>(true);
-            ca.postExposure.Override(0.18f);
-            ca.contrast.Override(8f);
-            ca.saturation.Override(tropical ? 26f : 20f);
+            ca.postExposure.Override(berry ? 0.22f : 0.02f);
+            ca.contrast.Override(berry ? 8f : 14f);
+            ca.saturation.Override(berry ? 36f : tropical ? 30f : 26f);
+            // Cool, slightly lifted shade and warm highlights: the soft storybook look.
+            var smh = profile.Add<ShadowsMidtonesHighlights>(true);
+            smh.shadows.Override(new Vector4(0.96f, 0.97f, 1.08f, 0.02f));
+            smh.highlights.Override(new Vector4(1.04f, 1.01f, 0.95f, 0f));
             var wb = profile.Add<WhiteBalance>(true);
-            wb.temperature.Override(tropical ? 9f : 6f);
+            wb.temperature.Override(berry ? 5f : tropical ? 9f : 6f);
             var bloom = profile.Add<Bloom>(true);
             bloom.threshold.Override(0.95f);
             bloom.intensity.Override(0.45f);
             bloom.scatter.Override(0.6f);
             var vig = profile.Add<Vignette>(true);
-            vig.intensity.Override(0.2f);
+            vig.intensity.Override(berry ? 0.14f : 0.2f);
             vig.smoothness.Override(0.5f);
-            string profilePath = tropical ? "Assets/Game/Generated/PostFX_Tropical.asset" : "Assets/Game/Generated/PostFX.asset";
+            string profilePath = berry ? "Assets/Game/Generated/PostFX_Berry.asset" : tropical ? "Assets/Game/Generated/PostFX_Tropical.asset" : "Assets/Game/Generated/PostFX.asset";
             AssetDatabase.DeleteAsset(profilePath);
             AssetDatabase.CreateAsset(profile, profilePath);
             foreach (var comp in profile.components) AssetDatabase.AddObjectToAsset(comp, profile);
@@ -611,7 +664,7 @@ namespace JuiceKing.EditorTools
                 B.Prop("Furniture/chair", t, tp + new Vector3(0.95f, 0f, 0f), 0.2f, -90f);
                 // Umbrella
                 B.Cyl("UmbrellaPole", t, _mWhite, tp + new Vector3(0f, 1.3f, 0f), 0.07f, 2.6f);
-                B.MeshObj("Umbrella", t, MakeUmbrella(), _mAwning, tp + new Vector3(0f, 2.3f, 0f), new Vector3(1.9f, 0.6f, 1.9f));
+                StripedUmbrella(t, MatLib.Lit("Canopy_Patio", new Color(0.96f, 0.34f, 0.32f), 0.2f), tp + new Vector3(0f, 2.3f, 0f), new Vector3(1.9f, 0.6f, 1.9f));
             }
             B.Prop("Furniture/pottedPlant", t, new Vector3(2.1f, 0f, 1.7f), 0.35f);
             B.Prop("Furniture/pottedPlant", t, new Vector3(-2.2f, 0f, -1.6f), 0.35f);
@@ -865,6 +918,8 @@ namespace JuiceKing.EditorTools
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToLandscapeLeft = false;
             PlayerSettings.allowedAutorotateToLandscapeRight = false;
+            // Strictly portrait (the HUD is laid out for it).
+            PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
             PlayerSettings.runInBackground = true;
             PlayerSettings.gcIncremental = true;
             PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
@@ -917,8 +972,9 @@ namespace JuiceKing.EditorTools
                 var imp = (UnityEditor.U2D.SpriteAtlasImporter)AssetImporter.GetAtPath(path);
                 if (imp != null)
                 {
-                    imp.packingSettings = new UnityEditor.U2D.SpriteAtlasPackingSettings { enableRotation = false, enableTightPacking = false, padding = 4 };
-                    imp.textureSettings = new UnityEditor.U2D.SpriteAtlasTextureSettings { filterMode = FilterMode.Bilinear, generateMipMaps = false, sRGB = true };
+                    // Mipmaps keep 256 px icons smooth when shown at 60-120 px (no jagged edges); the padding stops mips bleeding.
+                    imp.packingSettings = new UnityEditor.U2D.SpriteAtlasPackingSettings { enableRotation = false, enableTightPacking = false, padding = 8 };
+                    imp.textureSettings = new UnityEditor.U2D.SpriteAtlasTextureSettings { filterMode = FilterMode.Trilinear, generateMipMaps = true, sRGB = true };
                     imp.includeInBuild = true;
                     imp.SaveAndReimport();
                 }

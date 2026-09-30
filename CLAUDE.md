@@ -27,6 +27,7 @@ A 3D arcade-idle mobile game in the style of *Chainsaw Juice King: Idle Shop*, b
    - Keep props low-poly. Use the builder's `_lowSphere`/`UVSphere` rather than Unity's 768-triangle sphere.
    - Merge static props with `CombineUnder` or static batching.
    - Small decor casts no shadows.
+   - Only tall decor gets the see-through keyword (`_SEE_THROUGH`): its `clip()` turns off hidden-surface removal on mobile GPUs.
 8. **Someone may be playing in the Editor while Claude works.** Before teleporting the player or writing PlayerPrefs from a script, check `InputJoystick.IsTouching` and the player position. If someone is playing, stay read-only.
 
 ---
@@ -39,25 +40,32 @@ Assets/Game/
     Core/              GameManager (money, unlocks, save), Economy + Upgrades, Items (item types, Balance),
                        Boosts, Ads, Platform, Tweener, Pool, Sfx (synth audio), Fx (particles), CameraFollow, NavBaker
     Items/             Carrier (back/hand stack), ItemPile, LooseItems (ground pickups), StackItem
-    Stations/          FruitNode / TropicalFruitNode / FruitField, Juicer (= mixer), Counter, CashPile, TrashBin
-    Zones/             floor pads: Drop, Pickup, Cash, Upgrade, Unlock, Trash + UnlockManager
-    Actors/            PlayerController, Chainsaw, Customer + CustomerManager, WorkerAI (farmer / waiter / loader), CharacterAnim
-    Delivery/          DeliveryManager, DeliveryOrder, DeliveryTruck, DeliveryBay, DeliveryZone, TruckBoard (3D order sign),
-                       DeliveryHUD (parcel button), DeliveryPopup
+    Stations/          FruitNode / TropicalFruitNode / BerryBushNode / FruitField, Juicer (= mixer) / BerryPress, Counter (juice or cake),
+                       Processor → CakeMixer / Oven (cake chain), CashPile, TrashBin
+    Zones/             floor pads: Drop, Pickup, Cash, Upgrade, Unlock, Trash, FoxRestore + UnlockManager
+    Actors/            PlayerController, Chainsaw, Customer + CustomerManager, WorkerAI (farmer / waiter / loader), CharacterAnim,
+                       FoxActor + FoxRaid (Berry Blast raids)
+    Delivery/          DeliveryManager (one per desk), DeliveryOrder, DeliveryTruck, DeliveryBay, DeliveryZone, DeliveryBox,
+                       TruckBoard (3D order sign), DeliveryHUD (parcel button), DeliveryPopup
     Expansion/         ExpansionManager (world complete, scene switch), CompletionPopup, ExpansionIntro, ScreenFader
-    UI/                HUD, Tutorial, UpgradePanel, BoostBar, OfferPopup, AdOverlay, UnlockBanner, SettingsPopup, InputJoystick…
+    UI/                HUD (money, progress, Golden Apples), Tutorial, UpgradePanel, BoostBar, OfferPopup, PremiumPopup, FoxHUD,
+                       AdOverlay, UnlockBanner, SettingsPopup, InputJoystick…
     Decor/             Ambient (wind, spinners, clouds, water), Wanderer (animals), Butterflies, Birds, PathMover
   Scripts/Editor/      builders (namespace JuiceKing.EditorTools)
-    Builder/           JuiceKingBuilder.*.cs — one partial class split by area (see §3.4), B.cs = scene helpers
-    Gen/               ArtGen (+ .Tropical) procedural textures/icons, Painter (SDF painter), MeshGen, MatLib,
+    Builder/           JuiceKingBuilder.*.cs — one partial class split by area (see §3.5), B.cs = scene helpers
+    Gen/               ArtGen (+ .Tropical, .Berry) procedural textures/icons, Painter (SDF painter), MeshGen, MatLib,
                        KenneyImport, UIKit + UIAtlasCutter (cuts sprites out of the UI atlases)
-  Scenes/              Boot.unity (loading screen, build index 0), JuiceKing.unity (world 0), Tropical.unity (world 1) — generated
+  Shaders/             Stylized.shader (every opaque material) and Water.shader — hand-written URP HLSL, edit directly
+  Scenes/              Boot.unity (loading screen, build index 0), JuiceKing.unity (world 0), Tropical.unity (world 1),
+                       Berry.unity (world 2) — generated
   Generated/           textures, sprites, meshes, materials, fonts, sprite atlas — generated
   Prefabs/             items, customers, FX — generated
   Art/Kenney/          CC0 Kenney models (characters, market, survival, food, nature, furniture)
-  UI/                  the project's own UI atlases (Atlas1-3.png), cut by UIKit;
+  UI/                  the project's own UI atlases (Atlas1-3.png; Atlas4.png = Berry Blast theme; Atlas5.png = hi-res
+                       background panels), cut by UIKit;
                        UI/Loading screen/ = loading-screen art (starterBG.png key art, GameLogo.png)
 Assets/ThirdParty/     ithappy animals (chicken/dog/cat), 300Mind UI sheets
+Assets/Feel/           More Mountains Feel + Nice Vibrations (imported by the owner; needs the built-in Video module, now enabled)
 ```
 
 ---
@@ -77,12 +85,12 @@ All pads are `Zone` subclasses and work by cheap distance tests (no physics trig
 
 ### 3.2 Worlds (expansions)
 
-`SaveData.expansion` picks the world: 0 is the original farm, 1 is the Tropical Farm.
+`SaveData.expansion` picks the world: 0 is the original farm, 1 is the Tropical Farm, 2 is the Berry Blast.
 
 - **Boot.** `Boot.unity` (`LoadingScreen`) reads the save (`GameManager.PeekSavedExpansion`), synthesises the sounds (`Sfx.Warmup`), loads that world asynchronously behind the logo and progress bar, then fades out over the running game. World switches and progress resets go back through it (`LoadingScreen.LoadSavedWorld()`). The intro waits for `LoadingScreen.Busy` to clear.
 - **Redirect (fallback).** Every world scene has a `GameManager` with `sceneExpansion`. If you press Play directly in a world scene whose save belongs to another world, `GameManager.Awake` loads the right scene.
 - **Completion.** When every pad is unlocked and every upgrade is maxed, `ExpansionManager` shows `CompletionPopup`.
-- **Switching world.** `GameManager.BeginExpansion` then archives world 0, resets per-world progress (lifetime stats are kept) and loads the next scene.
+- **Switching world.** `GameManager.BeginExpansion` then archives the finished world (`world0Archive` / `world1Archive`), resets per-world progress (lifetime stats and Golden Apples are kept) and loads the next scene with `Economy.StartMoney(world)`.
 - **First visit.** `ExpansionIntro` plays a skippable camera tour driven by `CameraFollow.Peek`.
 - **Scene names.** `ExpansionManager.SceneName(i)` holds the list; keep it in sync with the build settings (`JuiceKingBuilder.SetBuildScenes`).
 
@@ -92,6 +100,7 @@ All pads are `Zone` subclasses and work by cheap distance tests (no physics trig
 - **`Upgrades.ForWorld(world)`** returns a data-driven list of `UpgradeDef`s.
   - World 0 wraps the 5 classic upgrades (their levels live in `SaveData.sawLevel`…).
   - World 1 is an 18-upgrade tree in 6 tabs (levels in `SaveData.upIds`/`upLevels`).
+  - World 2 is a 24-upgrade tree; its tabs come from `Upgrades.CategoriesFor(world)` (FARM, MIXER, BAKERY, DELIVERY, PLAYER, BUSINESS). It reuses world 1 ids on purpose (upgrades reset per world).
   - `UpgradePanel` builds its rows and tabs from this list.
 - **Delivery (world 1):**
   - `DeliveryManager` schedules trucks, generates orders (`DeliveryOrders`) and pays out.
@@ -99,11 +108,30 @@ All pads are `Zone` subclasses and work by cheap distance tests (no physics trig
   - Trucks follow waypoint paths set up by `DeliveryBay`.
   - Loading happens on `DeliveryZone`.
   - Order info is shown on the 3D `TruckBoard` at the bay and in `DeliveryPopup`, opened by the parcel button (`DeliveryHUD`).
+- **Product lines.** `ProductLine` (Juice, Cake) drives `Counter.line`, `CustomerManager.line` and `DeliveryOrder.line`. Item types: slices 0–19, juices 20–39, money 40, batter 60–79, cakes 80–99 (`ItemTypes.Product/IsProduct/IsSellable`). `GameManager.Orderable(line)` lists what customers may order: juice needs juicer + field, cake needs cake mixer + oven + field.
+- **Cake chain (world 2).** `CakeMixer` (berries → batter tin) and `Oven` (tin → cake) derive from `Processor`. The oven pulls tins off its mixer's conveyor pile; cakes go to the oven's rack (`PickupZone`), then the pastry case (`Counter` with `line = Cake`).
+- **Helpers.** `WorkerAI` works on the `IProducer` interface (juicers, presses, ovens). Farmers alternate between `juicer.inputZone` and `feedZones`; the loader serves `deliveryZones` (several desks) and returns leftover cakes to `altCounter`.
+- **Delivery desks.** A scene may have several `DeliveryManager`s (`slot` 0/1 → `SaveData.delivery` / `delivery2`). `DeliveryManager.Focus()` picks the desk the HUD popup shows. When a bay has a `DeliveryBox`, goods fill the box and the box is loaded aboard at the end (world 2); otherwise they fly into the truck (world 1).
+- **Fox raids (world 2).** `FoxRaid` schedules raids (`SaveData.foxNext`), scripts `FoxActor`, damages a `FruitField` (`SetDamaged` → `FruitNode.Damage/Restore`) and keeps regrowth timers in `foxKinds`/`foxTimers`. The first raid is a cutscene through `ExpansionIntro.BeginCutscene/Caption/EndCutscene`. Restore: `FoxRestoreZone` pad or `FoxHUD` → `PremiumPopup` (apples or ad).
+- **Golden Apples.** `SaveData.goldenApples` (default = welcome gift, so old saves get it), `GameManager.AddApples/TrySpendApples/ApplesChanged`, effects in `AppleFx`, counter in `HUD`. Costs live in `Economy`.
 - **Tutorial.**
   - Scripted steps 0–5, then free-play guidance: the next unlock, "Upgrade ready", then "Max every upgrade…".
+  - World 2 adds a first-cake guide (`Tutorial.firstCakeMixer/firstOven/cakeCounter`) and a fox-damage hint.
   - The HUD crown bar shows world progress: unlocked pads plus upgrade levels (`ExpansionManager.Progress`).
 
-### 3.4 Builders (editor code)
+### 3.4 Materials and shaders
+
+- **`MatLib.Lit`** makes an opaque `JuiceKing/Stylized` material. Its property names match URP Lit (`_BaseColor`, `_BaseMap`, `_Smoothness`, `_Metallic`, `_EmissionColor`, `_Cull`).
+  - Extras: `_ShadowTint`, `_Wrap`, `_RimStrength`, `_AOHeight`/`_AOStrength` (contact darkening), `_DetailMap` (painterly noise), `_VertexColor`, `_Wind`, `_SeeThrough`.
+  - `MatLib.StylizeAll()` switches the Kenney model materials to it on every build.
+- **`MatLib.LitURP`** is URP Lit, for transparent surfaces (glass). **`MatLib.Water`** is `JuiceKing/Water`, which animates itself (keep `waveHeight` near 0 on small or low-poly water).
+- **Fog is per pixel** (`PixelFog` in both shaders). Keep it that way: per-vertex fog smears across big low-poly
+  surfaces (ground slabs, water) whose corners lie past the fog end, and washes the whole ground out in the Game view
+  (the Scene view usually has fog off, so it looks fine there).
+- **Vertex colours are not converted to linear space** (the project is Linear). Pass `color.linear` when a colour baked into a mesh must match a material colour, as `StripedCanopy` and `SwimRingMesh` do.
+- **See-through.** `CameraFollow` sets the global `_JKOccluder` (player chest, w = 1). Materials with `_SEE_THROUGH` dither out in front of the player. `SeeThroughTallDecor` enables it on decor taller than 1.8 m.
+
+### 3.5 Builders (editor code)
 
 `JuiceKingBuilder` is one partial class:
 
@@ -116,6 +144,9 @@ All pads are `Zone` subclasses and work by cheap distance tests (no physics trig
 | `JuiceKingBuilder.Env.cs` | world-0 decor: trash bin, pond, windmill, coop, animals, butterflies, clouds |
 | `JuiceKingBuilder.Assets.cs` | fonts, materials, sprites, item prefabs, characters, customer prefabs |
 | `JuiceKingBuilder.UI.cs` / `UIExpansion.cs` | HUD, popups, upgrade panel, delivery button/popup, completion popup, intro overlay |
+| `JuiceKingBuilder.Berry.cs` | world 2 scene: ground, one column per berry (patch, press, cake mixer, oven), pastry case, customers, desks, fox, unlock chain, intro |
+| `JuiceKingBuilder.BerryProps.cs` | berry bushes and patches, `BerryPress`, cake mixer + conveyor, oven + rack, pastry case, delivery desk + box, Berry Blast trucks, fox, cottages, fences, blossom trees, hives, rabbits |
+| `JuiceKingBuilder.Polish.cs` | every world, run before `OptimizeScene`: contact shadows (`AutoContacts`), foliage materials, see-through on tall decor, ambient particles, waterfall mesh, striped umbrellas, ProBuilder swim rings |
 | `JuiceKingBuilder.Optimize.cs` | `CombineUnder` mesh merging (per-scene folder `Generated/Meshes/Combined/<Scene>/`) |
 | `Gen/ArtGen*.cs` | every texture and icon, painted with SDFs in `Painter` |
 
@@ -127,9 +158,10 @@ All pads are `Zone` subclasses and work by cheap distance tests (no physics trig
 
 | Item | Does | When |
 |---|---|---|
-| **Build Everything** | art + UI cutting + imports + prefabs + **both** scenes + project settings | after changing `ArtGen`/`UIKit`/imports, or on first checkout |
-| **Rebuild Scene (skip art + import)** | prefabs + **both** scenes | most builder changes |
+| **Build Everything** | art + UI cutting + imports + prefabs + **all three** worlds + project settings | after changing `ArtGen`/`UIKit`/imports, or on first checkout |
+| **Rebuild Scene (skip art + import)** | prefabs + **all three** worlds | most builder changes |
 | **Rebuild Tropical Scene** | prefabs + Tropical only | island-only changes |
+| **Rebuild Berry Scene** | prefabs + Berry only | Berry Blast changes |
 | **Rebuild Boot (Loading) Scene** | the loading screen only | loading-screen changes |
 | **Reset Save Data** | deletes the PlayerPrefs save | fresh start |
 
@@ -138,6 +170,7 @@ All pads are `Zone` subclasses and work by cheap distance tests (no physics trig
 - `JuiceKing.EditorTools.JuiceKingBuilder.Run()` — Build Everything
 - `RunSceneOnly()` — Rebuild Scene
 - `RunTropicalOnly()` — Rebuild Tropical Scene
+- `RunBerryOnly()` — Rebuild Berry Scene (`ArtGen.GenerateBerry()` regenerates only the Berry Blast art)
 - `RunBootOnly()` — Rebuild Boot (Loading) Scene
 
 Each one logs a line when it finishes:
@@ -145,6 +178,7 @@ Each one logs a line when it finishes:
 - `[JuiceKing] Build complete`
 - `[JuiceKing] Scene rebuilt`
 - `[JuiceKing] Tropical rebuilt`
+- `[JuiceKing] Berry rebuilt`
 - `[JuiceKing] Boot rebuilt`
 
 **Running the game:**
@@ -178,7 +212,9 @@ unity command capture_game_view --width 540 --height 960 --save_path _cap/shot.p
 
 **Quirks**
 
-- **Long evals time out.** They report "Main thread operation timed out after 5000ms" but still run to completion. Poll `~/Library/Logs/Unity/Editor.log` for the builder's `[JuiceKing] …` line instead of trusting the response.
+- **Long evals time out.** They report "Main thread operation timed out after 5000ms" but still run to completion. Poll the Editor log for the builder's `[JuiceKing] …` line instead of trusting the response.
+- **Which log.** With a second Unity instance open, this project's Editor writes `~/Library/Logs/Unity/Editor-prev.log`; pick the most recently modified of `Editor.log` / `Editor-prev.log`. Lines from other projects (e.g. `Assets/_Project/...`) can appear in the shared log.
+- **Painter maths.** `Mathf.SmoothStep(a, b, t)` interpolates from a to b; it is not GLSL `smoothstep(edge0, edge1, x)`. Use `ArtGen.Edge` for masks.
 - **Wait for the compile.** After editing scripts, call `AssetDatabase.Refresh()`, then wait until `Library/ScriptAssemblies/Assembly-CSharp-Editor.dll` is newer than the newest `.cs` file before calling a builder. Otherwise stale code runs.
 - **Some compiles never finish.** A file touched without a content change never recompiles, so also stop waiting when the Editor has sat idle for ~20 s.
 - **`Object` is ambiguous in eval code.** Write `UnityEngine.Object`.
@@ -276,6 +312,22 @@ return "ok";
   2. Run Build Everything.
   3. Use `UIKit.Get("name")`.
   4. Check the cut with `UIKit.ContactSheet(path)`.
+  5. If the item's decorations touch a neighbour, the flood fill merges them: add a box in `UIKit.RegisterClips()`
+     (`UIAtlasCutter.Clip(atlas, seedX, seedY, rect)`).
+  6. Panels that stretch need a 9-slice entry in `UIKit.Borders`. A painted close X goes in `UIKit.CloseButtons`;
+     panels without one get a real round X button from `CloseHotspot`. Title/plank offsets per panel: `PlankY()`.
+- **Background panels (Atlas5, every world).** Sprites `p_*`: upgrades = `p_awning`, offer/premium = `p_red`,
+  settings = `p_plank`, delivery = `p_rope`, world complete = `p_gold`, rows/cards = `p_card_wood`, toasts = `p_card`,
+  objective/caption plank = `p_sign_wood` (loaded in `JuiceKingBuilder.Assets.cs`). They are drawn at 2x
+  (`PanelScale`); title centre per panel in `PlankY`, close-X spot in `CloseSpot` (they have no painted X).
+- **World 2 UI theme (Atlas4).** Sprites cut from `Atlas4.png` are named `b_*`. While world 2's UI is built,
+  `SwapUITheme` (`JuiceKingBuilder.UI.cs`) swaps the ribbon, buttons and video icon for the berry versions,
+  then restores them. The golden apple (every world) and the four berry icons also come from Atlas4. The fox popup
+  (`BuildPremiumPopup`) uses `b_panel_fox` at its native width so the fox never stretches.
+- **Add a prop:**
+  - It gets a contact shadow automatically if it is a direct child of `_stations`, `_decor` or `_nature`, or of a group listed in `PolishClassic`/`PolishTropical`.
+  - Opt out with `NoContact`. Small decor attached to a bigger prop gets its own shadow when its name is in `SeparateContact`.
+  - Props taller than 1.8 m under `_decor`/`_nature` dither out in front of the player.
 - **Add a sound:**
   1. Add an `SfxId` entry before `Count`.
   2. Synthesise it in `Sfx.BuildClips()` with `Make(name, duration, (t, d) => sample)`.
@@ -294,6 +346,7 @@ return "ok";
 - It compiles, and a rebuild logs no `Exception` or `error CS`.
 - Play mode runs in **both** worlds with an empty console (the Unity AI/licensing errors can be ignored).
 - An old save still loads. Test with a world-0 save that has no new fields.
+- UI fits at 1080×1920, a tall phone (1080×2340) and a tablet (1536×2048). Switch with `UnityEditor.PlayModeWindow.SetCustomRenderingResolution(w, h, "name")` and capture at a matching aspect. The canvases use CanvasScaler **Expand**, so the 1080×1920 layout always fits; lay the HUD out for 1080 px width. Top bar: money 16–286, world progress 300–780, settings 941–1059.
 - Portrait screenshots look right:
   - HUD elements don't overlap;
   - text fits its box;
@@ -307,6 +360,8 @@ return "ok";
 - **Ads are simulated.** `Ads.Provider` is null, so the `AdOverlay` counts down instead. To ship, implement `IRewardedAdProvider` for the chosen network (LevelPlay or Unity Ads). Ask the owner which network first.
 - **Bundle identifier** and signing are not set up for store builds.
 - **Web portals.** The hooks in `Core/Platform.cs` are ready. A landscape HUD pass is still needed for desktop web.
+- **Golden Apples cannot be bought yet.** There is no in-app purchase store; apples come from gifts, deliveries and world entry. An IAP shop would be the next step (ask the owner which store SDK).
+- **Feel / Nice Vibrations** (in `Assets/Feel`) is imported but not used by the game code yet. On this Mac its `.haptic` samples fail to import (`nice_vibrations_editor_plugin` DllNotFoundException): harmless console noise.
 - **Not play-tested yet:**
   - a truck timing out (it pays shop price for what was loaded);
   - "Stay a bit longer" and the NEW WORLD button;

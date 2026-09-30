@@ -9,12 +9,18 @@ namespace JuiceKing.EditorTools
         static readonly Dictionary<string, Mesh> _rounded = new Dictionary<string, Mesh>();
         static Material _mPadDash, _mPadHazard, _mLedOn, _mLedOff, _mChrome, _mMarble, _mPanelDark, _mSlabDark;
 
-        /// <summary>Cached rounded-edge box mesh of a given size (pivot at centre).</summary>
+        /// <summary>
+        /// Cached "toy block" mesh of a given size (pivot at centre): every edge and corner rounded, so props catch soft
+        /// highlights instead of reading as hard boxes.
+        /// </summary>
         static Mesh RoundedBox(string key, Vector3 size, float radius, int seg = 5)
         {
             if (_rounded.TryGetValue(key, out var m) && m != null) return m;
             var g = new MeshGen();
-            g.RoundedBox(Vector3.zero, size, radius, seg, 0);
+            float minDim = Mathf.Min(size.x, Mathf.Min(size.y, size.z));
+            float r = Mathf.Min(radius, minDim * 0.45f);
+            int bevelSeg = Mathf.Max(size.x, Mathf.Max(size.y, size.z)) > 1.4f ? 3 : 2;
+            g.BeveledBox(Vector3.zero, size, r, bevelSeg, 0);
             m = SaveMesh(g.ToMesh("RB_" + key), "RB_" + key);
             _rounded[key] = m;
             return m;
@@ -362,12 +368,17 @@ namespace JuiceKing.EditorTools
             bg.drawMode = SpriteDrawMode.Sliced;
             bg.size = new Vector2(2.6f, 0.72f);
             var ic = B.Sprite("Icon", label.transform, icon, new Vector3(-1.02f, 0.02f, 0f), SpriteScale(icon, 0.46f), false, 5);
-            var titleT = B.Text("Title", label.transform, title, 4.4f, Color.white, new Vector3(0.16f, 0.02f, 0f));
-            titleT.rectTransform.sizeDelta = new Vector2(2.1f, 0.6f);
+            // Title fills the space right of the icon so the two never overlap.
+            var titleT = B.Text("Title", label.transform, title, 4.4f, Color.white, new Vector3(0.24f, 0.02f, 0f));
+            titleT.rectTransform.sizeDelta = new Vector2(1.9f, 0.6f);
             titleT.enableAutoSizing = true;
             titleT.fontSizeMin = 2.4f;
             titleT.fontSizeMax = 4.4f;
-            var priceT = B.Text("Price", label.transform, "$" + price, 6.5f, new Color(1f, 0.9f, 0.35f), new Vector3(0.16f, 0.02f, 0f));
+            var priceT = B.Text("Price", label.transform, "$" + price, 6.5f, new Color(1f, 0.9f, 0.35f), new Vector3(0.24f, 0.02f, 0f));
+            priceT.rectTransform.sizeDelta = new Vector2(1.9f, 0.7f);
+            priceT.enableAutoSizing = true;
+            priceT.fontSizeMin = 3f;
+            priceT.fontSizeMax = 6.5f;
             priceT.gameObject.SetActive(false);
 
             var z = go.AddComponent<UnlockZone>();

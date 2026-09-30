@@ -24,6 +24,8 @@ namespace JuiceKing
         public TextMeshPro waitText;
         [Tooltip("Punched on news (truck arrived, delivery complete).")]
         public Transform panel;
+        [Tooltip("Desk this sign belongs to (empty = the scene's first desk).")]
+        public DeliveryManager manager;
 
         Vector3 _fillScale = Vector3.one;
         Vector3 _panelScale = Vector3.one;
@@ -47,7 +49,7 @@ namespace JuiceKing
 
         void Update()
         {
-            var dm = DeliveryManager.I;
+            var dm = manager != null ? manager : DeliveryManager.I;
             if (dm == null) return;
             var o = dm.Order;
             int mode = o == null ? 0 : dm.Loading ? 2 : 1;
@@ -98,7 +100,7 @@ namespace JuiceKing
             if (o == null) return;
             if (clientText != null) clientText.text = o.client;
             if (rewardText != null) rewardText.text = "$" + Economy.Money((long)(o.reward * Economy.DeliveryBoostMult));
-            if (juiceIcon != null && GameRefs.I != null) juiceIcon.sprite = GameRefs.I.JuiceIcon(o.kind);
+            if (juiceIcon != null && GameRefs.I != null) juiceIcon.sprite = GameRefs.I.ProductIcon(o.line, o.kind);
             if (countText != null) countText.text = o.delivered + " / " + o.qty;
             if (_lastDelivered >= 0 && o.delivered > _lastDelivered && countText != null) Tweener.Punch(countText.transform, 0.2f, 0.18f, Vector3.one);
             if (_lastDelivered < 0 || o.delivered < _lastDelivered) _shownFill = o.Progress;

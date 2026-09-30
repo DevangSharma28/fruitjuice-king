@@ -26,6 +26,14 @@ namespace JuiceKing
         public TextMeshProUGUI timerText;
         public GameObject waitGroup;
         public TextMeshProUGUI waitText;
+        [Header("Golden Apple action (optional)")]
+        [Tooltip("CALL TRUCK NOW between trucks, FINISH ORDER while loading.")]
+        public Button appleButton;
+        public TextMeshProUGUI appleText;
+        [Tooltip("Desk name (scenes with more than one desk).")]
+        public TextMeshProUGUI deskText;
+
+        DeliveryManager _dm;
 
         bool _open;
         float _fill;
@@ -40,6 +48,7 @@ namespace JuiceKing
             if (dimButton != null) dimButton.onClick.AddListener(Close);
             if (closeButton != null) closeButton.onClick.AddListener(Close);
             if (goButton != null) goButton.onClick.AddListener(GoToBay);
+            if (appleButton != null) appleButton.onClick.AddListener(OnApple);
             gameObject.SetActive(false);
         }
 
@@ -51,7 +60,8 @@ namespace JuiceKing
             gameObject.SetActive(true);
             _lastSecond = -1;
             _lastDelivered = -1;
-            var dm = DeliveryManager.I;
+            _dm = DeliveryManager.Focus();
+            var dm = _dm;
             _fill = dm != null && dm.Order != null ? dm.Order.Progress : 0f;
             Refresh();
             Tweener.Scale(window, Vector3.one * 0.5f, Vector3.one, 0.35f, Ease.OutBack);
@@ -70,9 +80,26 @@ namespace JuiceKing
             });
         }
 
+        void OnApple()
+        {
+            var dm = _dm;
+            if (dm == null) return;
+            bool ok = dm.Order == null ? dm.CallTruckNow() : dm.FinishNow();
+            if (!ok)
+            {
+                Sfx.Play(SfxId.Error, 0.3f);
+                if (appleButton != null) Tweener.Punch(appleButton.transform, 0.2f, 0.25f, Vector3.one);
+                if (HUD.I != null) HUD.I.Toast("Not enough Golden Apples", GameRefs.I != null ? GameRefs.I.appleIcon : null);
+                return;
+            }
+            Sfx.Play(SfxId.Sparkle, 0.5f, 1.2f);
+            _lastSecond = -1;
+            _lastDelivered = -1;
+        }
+
         void GoToBay()
         {
-            var dm = DeliveryManager.I;
+            var dm = _dm != null ? _dm : DeliveryManager.I;
             Close();
             if (dm != null && dm.bay != null && !CameraFollow.Busy) CameraFollow.Peek(dm.bay.park.position, 1.4f, 1.15f);
         }
@@ -84,8 +111,14 @@ namespace JuiceKing
 
         void Refresh()
         {
-            var dm = DeliveryManager.I;
+            var dm = _dm != null ? _dm : DeliveryManager.I;
             if (dm == null) return;
+            if (deskText != null)
+            {
+                bool multi = DeliveryManager.All.Count > 1;
+                if (deskText.gameObject.activeSelf != multi) deskText.gameObject.SetActive(multi);
+                if (multi) deskText.text = dm.deskName;
+            }
             var o = dm.Order;
             bool has = o != null;
             if (orderGroup != null && orderGroup.activeSelf != has) orderGroup.SetActive(has);
@@ -100,10 +133,18 @@ namespace JuiceKing
                     if (_lastDelivered >= 0 && countText != null) Tweener.Punch(countText.transform, 0.25f, 0.2f, Vector3.one);
                     _lastDelivered = o.delivered;
                     if (clientText != null) clientText.text = o.client;
-                    if (juiceIcon != null && GameRefs.I != null) juiceIcon.sprite = GameRefs.I.JuiceIcon(o.kind);
-                    if (countText != null) countText.text = o.delivered + " / " + o.qty + "  " + Balance.JuiceNames[(int)o.kind];
+                    if (juiceIcon != null && GameRefs.I != null) juiceIcon.sprite = GameRefs.I.ProductIcon(o.line, o.kind);
+                    if (countText != null) countText.text = o.delivered + " / " + o.qty + "  " + o.Name;
                     if (rewardText != null) rewardText.text = "$" + Economy.Money((long)(o.reward * Economy.DeliveryBoostMult));
                 }
+            }
+
+            if (appleButton != null)
+            {
+                bool offer = !has || dm.Loading;
+                if (appleButton.gameObject.activeSelf != offer) appleButton.gameObject.SetActive(offer);
+                if (offer && appleText != null)
+                    appleText.text = !has ? "CALL NOW  " + Economy.ApplesCallTruck : "FINISH  " + dm.FinishCost;
             }
 
             int sec = Mathf.CeilToInt(has ? dm.TimeLeft : Mathf.Max(0f, dm.Cooldown));

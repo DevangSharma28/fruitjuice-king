@@ -51,7 +51,7 @@ Progress (money, unlocks, upgrades, tutorial step and last-seen time) is saved t
 
 ## Rewarded ads and boosts
 
-Once the tutorial reaches its first sale, a column of boost buttons appears on the right:
+Once the tutorial reaches its first sale, a column of boost buttons appears on the right (all on the same brown wooden tile):
 
 | Boost | Reward | Where to tune |
 |---|---|---|
@@ -130,6 +130,70 @@ Boosts carry over:
 
 **Saves.** Old saves load unchanged. `saveVersion` 0 → 2 adds lifetime stats, estimated from cups sold. Unknown fields default safely, and the redirect in `GameManager.Awake` sends a Tropical save straight to its scene.
 
+## Expansion 2: Berry Blast
+
+**Unlocking it.** Finish the Tropical Farm (every pad bought, every upgrade maxed). A **TROPICAL TYCOON!** popup offers **ENTER BERRY BLAST**, or a NEW WORLD button if you stay. Entering archives the island (`world1Archive`), resets per-world progress, starts you with $1,500 and a gift of 5 Golden Apples, and plays a fly-over: patches, presses, Cake Hall, delivery desks, and the fox's den.
+
+**The village** (`Berry.unity`). Everything sits in one column per berry, so walks stay short:
+
+| Row (south → north) | What is there |
+|---|---|
+| Cobbled square | the **Berry Bar** juice counter, till, workshop, trash bin |
+| Presses | four **berry presses** (input pad north, cups on the tray south) |
+| Patches | Strawberry Patch, Raspberry Patch, Blueberry Patch, Cranberry Bog (6 bushes each) |
+| Fox lane | the path the fox sneaks along; farmhand pads |
+| Cake Hall | per berry: **cake mixer** → conveyor → **oven**, with a cooling rack |
+| North street | the **pastry case**, cake customers queuing from the street |
+| East | two **delivery desks** on a lay-by road |
+
+Around it: pastel cottages, a bakery with a smoking chimney, blossom trees, a forest ring, flower beds, beehives with bees, rabbits, a lily pond, butterflies, birds and drifting blossom petals.
+
+**Berries.** Bushes shake and rustle on every chainsaw bite, then the ripe berries pop off in a spray of leaves and roll onto the soil. Each berry is packed its own way (strawberries on a leaf, raspberries and blueberries in punnets, cranberries in a scoop), and each has its own drink:
+
+| Berry | Drink | Cake |
+|---|---|---|
+| Strawberry | Strawberry Smoothie (cream and a berry on top) | Strawberry Shortcake |
+| Raspberry | Raspberry Fizz (mason jar) | Raspberry Velvet |
+| Blueberry | Blueberry Shake (milk bottle) | Blueberry Cheesecake |
+| Cranberry | Cranberry Cooler (tumbler with ice and lime) | Cranberry Tart |
+
+**Berry presses** (`BerryPress`, a `Juicer` with a richer show). Berries tumble in a glass drum, a piston presses them in three strokes, juice pulses down a clear pipe, a gauge sweeps round and a ring of lights fills as the batch completes; the gold crown on the sign bounces on every cup.
+
+**Berry Cake Shop** (a second business with its own queue):
+1. Bring berries to the **cake mixer** (yellow pad south of it). Three berries make one tin of batter: flour puffs from the sack, the whisk spins, the bowl turns.
+2. The tin rides the **conveyor** into the **oven** by itself. The window glows, a timer bar fills, the chimney steams, and with a *ding* the cake slides out onto the cooling rack.
+3. Pick cakes up on the green pad by the rack and stock the **pastry case** from its south side.
+4. Cake customers (party hats, pink order bubbles) queue on the north side and pay about 3.5x a juice. Cake orders are small: 1–3 cakes.
+
+The **Baker** helper serves the cake queue from the ovens; **farmhands** alternate trips between their berry's press and its cake mixer.
+
+**Fox raids** (`FoxRaid`, `FoxActor`). Now and then (every 4–7 minutes, rarer with the **Fox Fence** upgrade) a fox slips out of its den in the woods, runs along the fox lane, pounces into three bushes and escapes with the berries. The patch wilts: it stops producing and customers stop ordering that berry.
+- It regrows by itself in 5 minutes (faster with **Garden Care**). A glowing pad with a countdown appears on the lane in front of it, and a fox chip with the timer shows on the HUD.
+- Step on the pad (or tap the chip) to **RESTORE** it now for **3 Golden Apples**, or **WATCH AD**.
+- The first raid is a short cutscene ("Uh oh... a sneaky fox!") that ends on this choice. It happens about 50 s after the tutorial.
+- Raided patches and their timers are saved; regrowth keeps ticking while the game is closed.
+
+**Delivery desks.** Two desks (Desk B unlocks later), each with its own trucks and order board. Trucks are new too: rounded cabs with headlight "eyes" and a smiling grille, mirrors, fenders, brake lights, a berry mural and a roof mascot per type (Berry Van, Smoothie Co., Party Time, Royal Berry). They brake smoothly into the lay-by, the body dips and settles.
+1. The truck stops and an **empty box** pops up on the pad beside it, flaps open.
+2. Stand on the pad with the ordered juice (or cakes, once the Cake Shop bakes): items fly in, the box fills, the label counts up.
+3. When it is full the flaps fold shut, tape seals it, and the box is lifted into the truck's cargo door; the truck dips under the weight, you get the payout and a **Golden Apple**, and the truck drives away.
+- The first truck is always an easy juice order. Later trucks may order cakes (fewer items, bigger rewards).
+- The **Loader** fills whichever desk needs it.
+
+**Upgrades.** 24 upgrades in 6 tabs: FARM (Harvest Speed, Berry Yield, Regrowth, Fox Fence, Garden Care), MIXER (Press Speed, Bonus Cup, Tray Size), BAKERY (Oven Heat, Cooling Rack, Cake Recipe, Pastry Case), DELIVERY (4), PLAYER (3), BUSINESS (Juice Price, Juice Counter, Helper Speed, Helper Carry, Night Shift).
+
+## Golden Apples (premium currency)
+
+Golden Apples are shown next to the settings gear in every world and are kept when you move to a new world.
+
+| Earn | Spend |
+|---|---|
+| 5 as a welcome gift (existing saves get them too) | **3** to restore a fox-raided patch at once |
+| 3–5 when entering a new world | **1** to call the next truck now (delivery card) |
+| 1 per Berry Blast delivery, 2 per premium truck | **1 per 12 missing items** to finish a truck order at once |
+
+Rewards fly up to the counter with a chime; spending sparkles. Numbers live in `Economy` (`StartingApples`, `ApplesRestoreFarm`, `ApplesCallTruck`, `ApplesFinishOrder`). The **WATCH AD** button is the free alternative wherever a restore is offered.
+
 ## Loading screen
 
 `Boot.unity` / `Runtime/UI/LoadingScreen.cs`. The art comes from `Assets/Game/UI/Loading screen/`:
@@ -150,8 +214,21 @@ To change the art, replace the two PNGs (keep the names) and run **Juice King �
 
 - **Particles** (`Core/Fx.cs`): juice droplets, lingering ground splats, shockwave rings, stars, hearts, leaves, coins, glints, bubbles, footstep dust and a turbo trail. They all come from 16 shared, looping particle systems (emission rate 0) that are emitted on demand.
 - **Animation**: the stack bounces on every landing and items squash; characters lean into their run; customers hop and cheer (the `emote-yes` clip is on the `Cheer` trigger); fruit sways idly and regrows with an elastic pop; juicers wobble and bubble; the bin lid springs open; UI coins swoop to the money counter; buttons squish; boost buttons wiggle; a "NEW!" banner drops in after each unlock.
-- **Ambient life** (`Decor/`): `Ambient` drives the wind sway on trees, flowers, grass, reeds and bunting, the windmill sails, drifting cloud shadows and the scrolling pond water in a single Update. `Wanderer` drives the chickens, dog, cat and ducks, which scatter when you run at them. `Butterflies` flutters over the flower beds.
+- **Ambient life** (`Decor/`): `Ambient` drives the wind sway on trees, flowers, grass, reeds and bunting, the windmill sails, drifting cloud shadows, the scrolling foam and the falling waterfall in a single Update. `Wanderer` drives the chickens, dog, cat and ducks, which scatter when you run at them. `Butterflies` flutters over the flower beds.
 - **ASMR audio** (`Core/Sfx.cs`): all sounds are synthesised at 44.1 kHz with soft attacks and rounded tails: squelchy fruit bursts, crunchy chops, wooden "tok"s into the hopper, glass "tink"s on the counter, metallic coin clinks that rise in pitch during a collection streak, a marimba unlock chime, bubbling pours, bin thunks, footstep taps, and a looping breeze-and-birdsong ambience.
+
+## Look
+
+Everything opaque is drawn with one hand-written shader, `Assets/Game/Shaders/Stylized.shader`, and the water with `Water.shader`. The look is soft and storybook-like:
+
+- **Shading.** Light wraps softly around shapes, shade drifts to a cool lilac instead of grey, and a warm rim light outlines everything from the high camera. The sides of props darken a little near the ground. Faint world-space noise keeps big surfaces from looking flat. Shiny and metal parts get a cheap fake reflection.
+- **Foliage.** Palm fronds, broad leaves and canopies are shaded from a darker base to sunlit tips (vertex colours), and they sway in the wind in the vertex shader, shadows included. Kenney tree leaves and grass sway too.
+- **Water.** The pond, lagoon and ocean have drifting caustics, sun sparkles and a shallow-to-deep colour shift. The lagoon's waterfall is a curved, streaming sheet with foam at the lip and the splash, plus a little mist.
+- **Contact shadows.** Every prop that stands on the ground gets a soft oval shadow sized to its footprint (a trunk for a tree, the whole base for a hut). Delivery trucks carry theirs down the road.
+- **See-through.** Tall decor (trees, umbrellas, the windmill, huts, signs) dithers away when it stands between the camera and the player.
+- **Ambient particles.** Pollen motes float and leaves drift down around the player in both worlds.
+- **Details.** Striped patio and beach umbrellas, striped swim rings (ProBuilder) in the lagoon and on the sand, a pad you can afford twinkles, and a glint sweeps across the progress bar when it grows.
+- **Colour grading.** Neutral tonemapping with extra contrast and saturation, cool shadows and warm highlights (`BuildLighting`).
 
 ## Platforms and performance
 
@@ -160,7 +237,7 @@ The mobile build (Android and iOS, portrait) comes first. Web portals (itch.io, 
 - **Render settings.** `Mobile_RPAsset` is used on Android, iOS and WebGL: HDR off, MSAA 2x, render scale 0.9, 1024 shadow map, 32 m shadow distance, no additional lights. `PC_RPAsset` is the editor/desktop profile. `ConfigureProject()` sets both on every full build.
 - **Player settings.** IL2CPP, ARM64 on Android, incremental GC, low managed stripping, portrait lock, and the screen never sleeps. **Set your own bundle identifier** (Player Settings ▸ Other) before a store build.
 - **Draw calls.** Juicers, counter and bin are merged into one mesh per material at build time (`JuiceKingBuilder.Optimize.cs`). Beds, trees, bushes, rocks and grass are static-batched. Only flowers, reeds, lily pads and bunting sway. Decor sits on layers 8 and 9 with camera cull distances of 70 m and 44 m. Small props cast no shadows. In the editor this took the scene from ~1,600 to ~750 effective draws, with about 65 SetPass calls.
-- **UI.** All sprites are packed into `Generated/UIAtlas.spriteatlasv2`. HUD elements sit under a `SafeArea` root, which keeps them clear of notches and home bars.
+- **UI.** All sprites are packed into `Generated/UIAtlas.spriteatlasv2`. HUD elements sit under a `SafeArea` root, which keeps them clear of notches and home bars. Berry Blast's popups, ribbons and buttons use the berry-themed `UI/Atlas4.png`.
 - **GC.** Tweens are pooled per type, and customers, items and floating text come from `Pool`.
 - **Web later.** `Core/Platform.cs` already reports `GameplayStart`/`GameplayStop` (popups, ads, settings) and `LoadingFinished`. A Poki or CrazyGames SDK bridge only needs to subscribe to those events and implement `IRewardedAdProvider`. The layout is portrait: desktop web will need a landscape HUD pass, and `CameraFollow` already widens the FOV for landscape.
 
@@ -203,7 +280,8 @@ Hand edits to the generated scenes are overwritten on rebuild. Put layout change
 | `Scripts/Runtime/Delivery` | DeliveryManager (schedule, orders, payout, save), DeliveryOrder (truck types, clients, rewards), DeliveryTruck (drive, park, door, cargo fill), DeliveryBay, DeliveryZone (loading pad), TruckBoard, DeliveryHUD |
 | `Scripts/Runtime/Expansion` | ExpansionManager (world-complete check, scene switch), CompletionPopup, ExpansionIntro, ScreenFader |
 | `Scripts/Runtime/Decor` | Ambient (wind, spinners, clouds, water), Wanderer (animals), Butterflies, Birds, PathMover (boats) |
-| `Scripts/Editor` | Builder: procedural textures and icons (`ArtGen`, `ArtGen.Tropical`), meshes, materials, Kenney import, scenes (`JuiceKingBuilder.Scene.cs`, `JuiceKingBuilder.Tropical.cs`), tropical plants, trucks and props (`JuiceKingBuilder.TropicalProps.cs`), environment dressing (`JuiceKingBuilder.Env.cs`) and UI construction (`JuiceKingBuilder.UI.cs`, `JuiceKingBuilder.UIExpansion.cs`) |
+| `Scripts/Editor` | Builder: procedural textures and icons (`ArtGen`, `ArtGen.Tropical`), meshes, materials, Kenney import, scenes (`JuiceKingBuilder.Scene.cs`, `JuiceKingBuilder.Tropical.cs`), tropical plants, trucks and props (`JuiceKingBuilder.TropicalProps.cs`), environment dressing (`JuiceKingBuilder.Env.cs`), visual polish (`JuiceKingBuilder.Polish.cs`) and UI construction (`JuiceKingBuilder.UI.cs`, `JuiceKingBuilder.UIExpansion.cs`) |
+| `Shaders` | `Stylized.shader` (every opaque material) and `Water.shader`: hand-written URP HLSL, SRP Batcher compatible |
 
 ## Credits
 

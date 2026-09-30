@@ -12,7 +12,7 @@ namespace JuiceKing
         public static ExpansionManager I { get; private set; }
 
         /// <summary>Scene of each world, in build-settings order.</summary>
-        static readonly string[] Scenes = { "JuiceKing", "Tropical" };
+        static readonly string[] Scenes = { "JuiceKing", "Tropical", "Berry" };
 
         public static int WorldCount => Scenes.Length;
         public static string SceneName(int expansion) => Scenes[Mathf.Clamp(expansion, 0, Scenes.Length - 1)];
@@ -106,7 +106,9 @@ namespace JuiceKing
             Sfx.Play(SfxId.Whoosh, 0.5f, 0.8f);
             ScreenFader.FadeOut(0.8f, () =>
             {
-                GameManager.I.BeginExpansion(expansion, Economy.TropicalStartMoney);
+                GameManager.I.BeginExpansion(expansion, Economy.StartMoney(expansion));
+                // A little premium welcome for every new world.
+                GameManager.I.AddApples(expansion >= 2 ? 5 : 3);
                 InputJoystick.Blocked = false;
                 // The loading screen takes over from the black fade and brings up the new world.
                 LoadingScreen.LoadSavedWorld();

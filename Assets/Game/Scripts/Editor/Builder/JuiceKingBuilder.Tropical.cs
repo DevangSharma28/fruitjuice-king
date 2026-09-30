@@ -139,7 +139,7 @@ namespace JuiceKing.EditorTools
 
             // ---------------- delivery bay
             var bay = BuildDeliveryBay(systems.transform, padDelivery, out var bayRoot, out var loadZone);
-            var loader = BuildWaiter(new Vector3(11.6f, 0f, -7.8f), mixers, counter, cm);
+            var loader = BuildWaiter(new Vector3(10.2f, 0f, -8.3f), mixers, counter, cm);
             loader.name = "Loader";
             var lai = loader.GetComponent<WorkerAI>();
             lai.role = WorkerAI.Role.Loader;
@@ -169,7 +169,7 @@ namespace JuiceKing.EditorTools
                 "Creamy banana shakes unlocked", zFarmerBanana, zPapayaMixer, zMangoMore);
             var zBananaMixer = TUnlock("t_banana_mixer", "Banana Blender", 3000, bananaMixer.transform.position, _uMachine, new[] { bananaMixer.gameObject }, "Blend bananas into thick shakes", zBananaField);
             var zCabana = TUnlock("t_cabana", "Beach Cabana", 1500, cabana.transform.position, _uStar, new[] { cabana }, "Guests love the beach vibes", zBananaMixer);
-            var zLoader = TUnlock("t_loader", "Hire Loader", 3500, new Vector3(11.6f, 0f, -7.8f), _uWaiter, new[] { loader }, "The loader fills trucks for you");
+            var zLoader = TUnlock("t_loader", "Hire Loader", 3500, new Vector3(10.2f, 0f, -8.3f), _uWaiter, new[] { loader }, "The loader fills trucks for you");
             var zFarmerMango = TUnlock("t_farmer_mango", "Mango Farmer", 2500, new Vector3(14.3f, 0f, 2.3f), _uFarmer, new[] { farmerMango }, "Mangoes picked around the clock");
             var zFarmerCoconut = TUnlock("t_farmer_coconut", "Coconut Farmer", 1600, new Vector3(-12.8f, 0f, 1f), _uFarmer, new[] { farmerCoconut }, "Your first tropical farmhand", zFarmerMango);
             var zDelivery = TUnlock("t_delivery", "Delivery Bay", 1200, loadZone.transform.position, _sTruck, new[] { bayRoot },
@@ -224,7 +224,9 @@ namespace JuiceKing.EditorTools
 
             // ---------------- world intro
             var em = systems.AddComponent<ExpansionManager>();
-            em.nextExpansion = -1;
+            em.nextExpansion = 2;
+            em.completionPopup = _uiCompletion;
+            em.nextWorldButton = _uiNextWorld;
             em.intro = _uiIntro;
             if (_uiIntro != null)
             {
@@ -251,6 +253,7 @@ namespace JuiceKing.EditorTools
             refs.juiceIcons = (Sprite[])_sJuiceIcons.Clone();
             UpgradeIconTable(out refs.upgradeIconKeys, out refs.upgradeIconSprites);
             refs.moneyIcon = _sMoney;
+            AssignPremiumRefs(refs);
             refs.particleMaterial = _mParticle;
             refs.fxMaterials = _mFx;
             refs.font = B.Font;
@@ -274,13 +277,25 @@ namespace JuiceKing.EditorTools
                 new Vector3(-14f, 0f, 12f), new Vector3(15f, 0f, 12f), new Vector3(-12f, 0f, -12f), new Vector3(10f, 0f, -12f)
             });
             BuildClouds();
-            var ocean = new List<Renderer>(water) { };
-            _ambient.water = ocean.ToArray();
+            // The water shader animates itself; only sprite foam scrolls here, and the waterfall has its own flow.
+            var scrolled = new List<Renderer>();
+            var flows = new List<Renderer>();
+            foreach (var r in water)
+            {
+                if (r == null) continue;
+                if (r.sharedMaterial == _tWaterfall) flows.Add(r);
+                else if (r.sharedMaterial.shader.name != "JuiceKing/Water") scrolled.Add(r);
+            }
+            _ambient.water = scrolled.ToArray();
             _ambient.waterScroll = new Vector2(0.012f, 0.008f);
+            _ambient.flows = flows.ToArray();
+            _ambient.flowScroll = new Vector2(0f, -0.55f);
             var sailA = MatLib.Lit("Sail_A", new Color(1f, 0.97f, 0.9f), 0.1f);
             var sailB = MatLib.Lit("Sail_B", new Color(1f, 0.55f, 0.35f), 0.1f);
             Sailboat(_decor, new[] { new Vector3(-30f, -0.35f, -42f), new Vector3(10f, -0.35f, -46f) }, sailA, 1.6f, 0f);
             Sailboat(_decor, new[] { new Vector3(40f, -0.35f, -30f), new Vector3(46f, -0.35f, 6f) }, sailB, 1.3f, 12f);
+
+            PolishTropical();
 
             // ---------------- mobile optimisation
             // Small ground decor does not need to cast shadows (saves shadow-map draw calls and fill).
@@ -602,11 +617,14 @@ namespace JuiceKing.EditorTools
 
         // ================================================================== unlock pads (tropical glow style)
 
+        /// <summary>Size of the next glow unlock pads (smaller where space is tight, e.g. Berry Blast farmhands).</summary>
+        static float _tPadSize = 2.9f;
+
         static UnlockZone TUnlock(string id, string title, int price, Vector3 pos, Sprite icon, GameObject[] reveal, string subtitle, params UnlockZone[] next)
         {
             var go = B.Node("Unlock_" + id, _unlocks, pos);
-            var size = new Vector2(2.9f, 2.9f);
-            Busy(pos.x, pos.z, 2.3f);
+            var size = new Vector2(_tPadSize, _tPadSize);
+            Busy(pos.x, pos.z, _tPadSize * 0.8f);
             var pad = B.Node("Pad", go.transform, Vector3.zero, null, new Vector3(size.x, 1f, size.y));
             // Soft glowing disc, breathing gold ring, radial progress, big icon and price.
             B.Decal("Base", pad.transform, _tGlowBase, new Vector3(0f, 0.03f, 0f), Vector2.one * 1.25f).GetComponent<MeshRenderer>().sortingOrder = -1;
@@ -649,12 +667,17 @@ namespace JuiceKing.EditorTools
             bg.drawMode = SpriteDrawMode.Sliced;
             bg.size = new Vector2(2.8f, 0.72f);
             var ic = B.Sprite("Icon", label.transform, icon, new Vector3(-1.1f, 0.02f, 0f), SpriteScale(icon, 0.46f), false, 5);
-            var titleT = B.Text("Title", label.transform, title, 4.4f, Color.white, new Vector3(0.16f, 0.02f, 0f));
-            titleT.rectTransform.sizeDelta = new Vector2(2.3f, 0.6f);
+            // Title fills the space right of the icon so the two never overlap.
+            var titleT = B.Text("Title", label.transform, title, 4.4f, Color.white, new Vector3(0.26f, 0.02f, 0f));
+            titleT.rectTransform.sizeDelta = new Vector2(2.05f, 0.6f);
             titleT.enableAutoSizing = true;
             titleT.fontSizeMin = 2.4f;
             titleT.fontSizeMax = 4.4f;
-            var priceT = B.Text("Price", label.transform, "$" + price, 6.5f, new Color(1f, 0.9f, 0.35f), new Vector3(0.16f, 0.02f, 0f));
+            var priceT = B.Text("Price", label.transform, "$" + price, 6.5f, new Color(1f, 0.9f, 0.35f), new Vector3(0.26f, 0.02f, 0f));
+            priceT.rectTransform.sizeDelta = new Vector2(2.05f, 0.7f);
+            priceT.enableAutoSizing = true;
+            priceT.fontSizeMin = 3f;
+            priceT.fontSizeMax = 6.5f;
             priceT.gameObject.SetActive(false);
 
             var z = go.AddComponent<UnlockZone>();
@@ -820,8 +843,14 @@ namespace JuiceKing.EditorTools
             for (int i = 0; i < 6; i++)
                 B.MeshObj("Boulder", ledge, _lowSphere, _tRock, new Vector3(-1.8f + i * 0.72f, 0.7f + (i % 2) * 0.5f, 0.3f + (i % 3) * 0.2f), new Vector3(1.4f, 1.6f + (i % 2) * 0.6f, 1.2f));
             B.MeshObj("TopRock", ledge, _lowSphere, _tRock, new Vector3(0f, 2.2f, 0.6f), new Vector3(2.6f, 1.2f, 1.6f));
-            var fall = B.MeshObj("Waterfall", ledge, B.Quad, _tLagoon, new Vector3(0f, 1.3f, -0.35f), new Vector3(1.1f, 2.4f, 1f), new Vector3(10f, 0f, 0f), false);
+            var fall = B.MeshObj("Waterfall", ledge, WaterfallMesh(), _tWaterfall, new Vector3(0f, 0f, -0.15f), Vector3.one, null, false);
             water.Add(fall.GetComponent<Renderer>());
+            // Foam where it pours over the lip and where it lands.
+            var foamLit = MatLib.Lit("WaterfallFoam", new Color(0.95f, 1f, 1f), 0.3f);
+            foamLit.SetColor("_EmissionColor", new Color(0.18f, 0.22f, 0.24f));
+            B.MeshObj("LipFoam", ledge, _lowSphere, foamLit, new Vector3(0f, 2.3f, -0.12f), new Vector3(1f, 0.16f, 0.3f), null, false);
+            foreach (var fx in new[] { -0.45f, 0f, 0.45f })
+                B.MeshObj("SplashFoam", ledge, _lowSphere, foamLit, new Vector3(fx, 0.04f, -0.72f + Mathf.Abs(fx) * 0.2f), new Vector3(0.6f, 0.14f, 0.42f), null, false);
             var foamMat = MatLib.Sprite("LagoonFoam", MatLib.Tex("soft_blob.png"), new Color(1f, 1f, 1f, 0.75f));
             B.Decal("Splash", root, foamMat, new Vector3(0f, 0.035f, r * 0.62f), new Vector2(2.2f, 1.2f));
             for (int i = 0; i < 12; i++)

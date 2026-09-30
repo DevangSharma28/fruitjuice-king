@@ -47,9 +47,10 @@ namespace JuiceKing
             Platform.Pause("completion");
             gameObject.SetActive(true);
 
-            titleText.text = "JUICE KING!";
-            subText.text = "You built the ultimate juice shop!";
-            string world = nextWorld == 1 ? "TROPICAL FARM" : "NEW WORLD";
+            int current = GameManager.I != null ? GameManager.I.data.expansion : 0;
+            titleText.text = current == 1 ? "TROPICAL TYCOON!" : "JUICE KING!";
+            subText.text = current == 1 ? "Your island juice empire is complete!" : "You built the ultimate juice shop!";
+            string world = nextWorld == 1 ? "TROPICAL FARM" : nextWorld == 2 ? "BERRY BLAST" : "NEW WORLD";
             if (enterText != null) enterText.text = "ENTER " + world;
 
             _targets[0] = s.earned;

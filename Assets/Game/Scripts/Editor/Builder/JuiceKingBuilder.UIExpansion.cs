@@ -11,6 +11,7 @@ namespace JuiceKing.EditorTools
         static GameObject _uiNextWorld;
         static CompletionPopup _uiCompletion;
         static ExpansionIntro _uiIntro;
+        static FoxHUD _uiFox;
         static CanvasGroup _uiSafeGroup;
 
         // ================================================================== upgrade panel
@@ -32,7 +33,8 @@ namespace JuiceKing.EditorTools
             const float rowW = innerW - 12f;
             const float innerX = 7f; // the left frame is a little wider than the right
             var window = UIRect("Window", panelRoot, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 30f),
-                new Vector2(windowW, head + 90f + tabsH + rowsN * rowH + 60f));
+                // + room for the frame's bottom border (leaves), which the last row must not run into.
+                new Vector2(windowW, head + 90f + tabsH + rowsN * rowH + 200f));
             Sliced(window, _uPanelAwning ? _uPanelAwning : _sPanel, awningScale, null, true);
             var ribbon = UIRect("Title", window, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -head - 18f), new Vector2(560f, 120f));
             Sliced(ribbon, _uRibbon ? _uRibbon : _sButton, 1.3f);
@@ -41,7 +43,7 @@ namespace JuiceKing.EditorTools
             UpgradeTab[] tabs = null;
             if (tabbed)
             {
-                var cats = Upgrades.Categories;
+                var cats = Upgrades.CategoriesFor(world);
                 tabs = new UpgradeTab[cats.Length];
                 const float gap = 6f;
                 float tw = (innerW - 16f - (cats.Length - 1) * gap) / cats.Length;
@@ -50,10 +52,10 @@ namespace JuiceKing.EditorTools
                 {
                     var trt = UIRect("Tab_" + cats[i], window, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(innerX + x0 + i * (tw + gap), -head - 88f), new Vector2(tw, 100f));
                     var btn = AtlasButton(trt, _uBtnCream ? _uBtnCream : _sButton, 1.2f);
-                    var lab = Label(Stretch("Text", trt, 6f, 6f, 10f, 16f), cats[i], 30f, UiInk, TextAlignmentOptions.Center, false);
+                    var lab = Label(Stretch("Text", trt, 6f, 6f, 10f, 16f), TabLabel(cats[i]), 34f, UiInk, TextAlignmentOptions.Center, false);
                     lab.enableAutoSizing = true;
-                    lab.fontSizeMin = 18f;
-                    lab.fontSizeMax = 30f;
+                    lab.fontSizeMin = 24f;
+                    lab.fontSizeMax = 34f;
                     var badge = UIRect("Badge", trt, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-12f, -10f), new Vector2(34f, 34f));
                     Img(badge, _sCircle, new Color(1f, 0.28f, 0.25f));
                     badge.gameObject.SetActive(false);
@@ -85,7 +87,7 @@ namespace JuiceKing.EditorTools
                 nmT.fontSizeMin = 30f;
                 nmT.fontSizeMax = 46f;
                 var lv = UIRect("Level", row, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(levelX, 44f), new Vector2(96f, 56f));
-                var lvT = Label(lv, "LV 1", 34f, new Color(0.95f, 0.5f, 0.1f), TextAlignmentOptions.MidlineLeft, false);
+                var lvT = Label(lv, "LV 1", 34f, new Color(0.95f, 0.5f, 0.1f), TextAlignmentOptions.MidlineRight, false);
                 var st = UIRect("Stat", row, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(textX, -8f), new Vector2(rowW - textX - 16f - btnW - 10f, 46f));
                 var stT = Label(st, "", 31f, new Color(0.45f, 0.36f, 0.3f), TextAlignmentOptions.MidlineLeft, false);
                 stT.richText = true;
@@ -115,7 +117,7 @@ namespace JuiceKing.EditorTools
                 };
             }
 
-            var closeUp = CloseHotspot(window, _uPanelAwning, "panel_awning", awningScale);
+            var closeUp = CloseHotspot(window, _uPanelAwning, _uPanelAwning ? _uPanelAwning.name : "", awningScale);
             var up = panelRoot.gameObject.AddComponent<UpgradePanel>();
             up.window = window;
             up.rows = rows;
@@ -123,9 +125,21 @@ namespace JuiceKing.EditorTools
             up.closeButton = closeUp;
             up.pipOn = new Color(1f, 0.72f, 0.12f);
             up.pipOff = new Color(0.84f, 0.76f, 0.66f);
+            up.baseHeight = head + 90f + tabsH + 200f;
+            up.rowStep = rowH;
             up.tabOn = Color.white;
             up.tabOff = new Color(0.78f, 0.72f, 0.66f);
         }
+
+        /// <summary>Short tab names (the category ids stay as they are: they are only labels, not saved).</summary>
+        static string TabLabel(string category) => category switch
+        {
+            "DELIVERY" => "TRUCKS",
+            "PLAYER" => "YOU",
+            "WORKERS" => "CREW",
+            "BUSINESS" => "SHOP",
+            _ => category,
+        };
 
         // ================================================================== delivery button + popup
 
@@ -153,7 +167,8 @@ namespace JuiceKing.EditorTools
 
         static DeliveryPopup BuildDeliveryPopup(Transform root)
         {
-            const float panelScale = 2.5f;
+            var sprite = _uPanelRope ? _uPanelRope : (_uPanelPlain ? _uPanelPlain : _sPanel);
+            float panelScale = PanelScale(sprite);
             var popRoot = Stretch("DeliveryPopup", root);
             var dimImg = Img(popRoot, _sWhite, new Color(0.05f, 0.04f, 0.08f, 0.5f), false, true);
             dimImg.preserveAspect = false;
@@ -161,20 +176,22 @@ namespace JuiceKing.EditorTools
             dim.targetGraphic = dimImg;
             dim.transition = Selectable.Transition.None;
 
-            var sprite = _uPanelPlain ? _uPanelPlain : _sPanel;
-            var w = UIRect("Window", popRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(820f, 920f));
+            var w = UIRect("Window", popRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(820f, 1080f));
             Sliced(w, sprite, panelScale, null, true);
-            float plankY = -48f * panelScale;
+            float plankY = -PlankY(sprite) * panelScale;
             Label(UIRect("Title", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, plankY), new Vector2(460f, 100f)),
                 "DELIVERY", 56f, Color.white, TextAlignmentOptions.Center, true);
-            var status = Label(UIRect("Status", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -232f), new Vector2(660f, 64f)),
+            var desk = Label(UIRect("Desk", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -204f), new Vector2(420f, 44f)),
+                "DESK A", 34f, new Color(0.95f, 0.45f, 0.1f), TextAlignmentOptions.Center, false);
+            desk.gameObject.SetActive(false);
+            var status = Label(UIRect("Status", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -248f), new Vector2(660f, 56f)),
                 "", 36f, UiInk, TextAlignmentOptions.Center, false);
             status.enableAutoSizing = true;
             status.fontSizeMin = 24f;
             status.fontSizeMax = 36f;
 
             // Current order.
-            var order = UIRect("Order", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -280f), new Vector2(680f, 420f));
+            var order = UIRect("Order", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -290f), new Vector2(680f, 420f));
             Sliced(order, _uCard ? _uCard : _sPanel, 1.5f);
             var client = Label(UIRect("Client", order, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -56f), new Vector2(600f, 70f)),
                 "CLIENT", 52f, new Color(0.95f, 0.45f, 0.1f), TextAlignmentOptions.Center, false);
@@ -207,7 +224,7 @@ namespace JuiceKing.EditorTools
             timer.fontSizeMax = 38f;
 
             // Between trucks.
-            var wait = UIRect("Wait", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -280f), new Vector2(680f, 420f));
+            var wait = UIRect("Wait", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -290f), new Vector2(680f, 420f));
             Sliced(wait, _uCard ? _uCard : _sPanel, 1.5f);
             var truck = UIRect("Truck", wait, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 50f), new Vector2(210f, 210f));
             Img(truck, _sTruck, Color.white);
@@ -222,10 +239,20 @@ namespace JuiceKing.EditorTools
             var goBtn = AtlasButton(go, _uBtnGreen ? _uBtnGreen : _sButton, 2.6f, false);
             Label(Stretch("Text", go, 30f, 30f, 0f, 20f), "SHOW ME THE BAY", 50f, Color.white, TextAlignmentOptions.Center, true).enableAutoSizing = true;
 
+            // Golden Apple shortcut: CALL NOW between trucks, FINISH while loading.
+            var ap = UIRect("Apple", w, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 226f), new Vector2(560f, 130f));
+            var apBtn = AtlasButton(ap, _uBtnYellow ? _uBtnYellow : _sButton, 2.5f, false);
+            var apIcon = UIRect("Icon", ap, new Vector2(1f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-70f, 8f), new Vector2(92f, 92f));
+            Img(apIcon, _sApple ? _sApple : _sStar, Color.white);
+            var apText = Label(Stretch("Text", ap, 40f, 130f, 0f, 20f), "CALL NOW  1", 46f, Color.white, TextAlignmentOptions.Center, true);
+            apText.enableAutoSizing = true;
+            apText.fontSizeMin = 28f;
+            apText.fontSizeMax = 46f;
+
             var pop = popRoot.gameObject.AddComponent<DeliveryPopup>();
             pop.window = w;
             pop.dimButton = dim;
-            pop.closeButton = CloseHotspot(w, sprite, "panel_plain", panelScale);
+            pop.closeButton = CloseHotspot(w, sprite, sprite ? sprite.name : "", panelScale);
             pop.goButton = goBtn;
             pop.statusText = status;
             pop.orderGroup = order.gameObject;
@@ -237,34 +264,38 @@ namespace JuiceKing.EditorTools
             pop.timerText = timer;
             pop.waitGroup = wait.gameObject;
             pop.waitText = waitT;
+            pop.appleButton = apBtn;
+            pop.appleText = apText;
+            pop.deskText = desk;
             return pop;
         }
 
         // ================================================================== world complete
 
-        static GameObject BuildNextWorldButton(RectTransform safe)
+        static GameObject BuildNextWorldButton(RectTransform safe, int nextWorld)
         {
             var rt = UIRect("NextWorld", safe, new Vector2(0f, 1f), new Vector2(0.5f, 0.5f), new Vector2(104f, -420f), new Vector2(170f, 170f));
             AtlasButton(rt, _uSqGreen ? _uSqGreen : _sButton, 1.35f);
             var ic = UIRect("Icon", rt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(120f, 120f));
-            Img(ic, _sFruit[3] ? _sFruit[3] : _sStar, Color.white);
+            var worldIcon = nextWorld >= 2 ? _sFruit[7] : _sFruit[3];
+            Img(ic, worldIcon ? worldIcon : _sStar, Color.white);
             var lab = UIRect("Label", rt, new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), new Vector2(0f, 10f), new Vector2(260f, 50f));
             Label(lab, "NEW WORLD", 34f, Color.white, TextAlignmentOptions.Center, true);
             rt.gameObject.AddComponent<UIPress>();
             return rt.gameObject;
         }
 
-        static CompletionPopup BuildCompletionPopup(Transform root)
+        static CompletionPopup BuildCompletionPopup(Transform root, int nextWorld)
         {
             var popRoot = Stretch("CompletionPopup", root);
             var dim = Img(popRoot, _sWhite, new Color(0.05f, 0.04f, 0.1f, 0.72f), false, true);
             dim.preserveAspect = false;
-            const float panelScale = 2.5f;
-            var popSprite = _uPanelGold ? _uPanelGold : _uPanelPlain;
-            var w = UIRect("Window", popRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -10f), new Vector2(900f, 1380f));
+            var popSprite = _uPanelWin ? _uPanelWin : (_uPanelGold ? _uPanelGold : _uPanelPlain);
+            float panelScale = PanelScale(popSprite);
+            var w = UIRect("Window", popRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -10f), new Vector2(900f, 1420f));
             Sliced(w, popSprite ? popSprite : _sPanel, panelScale, null, true);
-            float plankY = -48f * panelScale;
-            var title = Label(UIRect("Title", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-20f, plankY), new Vector2(520f, 110f)),
+            float plankY = -PlankY(popSprite) * panelScale;
+            var title = Label(UIRect("Title", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(TitleX(popSprite), plankY), new Vector2(520f, 110f)),
                 "JUICE KING!", 66f, Color.white, TextAlignmentOptions.Center, true);
             title.enableAutoSizing = true;
             title.fontSizeMin = 40f;
@@ -281,7 +312,8 @@ namespace JuiceKing.EditorTools
             sub.fontSizeMax = 42f;
 
             string[] names = { "Total earnings", "Juice produced", "Fruit harvested", "Customers served", "Expansion unlocked" };
-            Sprite[] icons = { _uCoins ? _uCoins : _sCoin, _sJuice, _sFruit[0], _uWaiter ? _uWaiter : _sHeart, _sFruit[3] ? _sFruit[3] : _sStar };
+            var nextIcon = nextWorld >= 2 ? _sFruit[7] : _sFruit[3];
+            Sprite[] icons = { _uCoins ? _uCoins : _sCoin, _sJuice, _sFruit[nextWorld >= 2 ? 3 : 0], _uWaiter ? _uWaiter : _sHeart, nextIcon ? nextIcon : _sStar };
             var values = new TextMeshProUGUI[names.Length];
             var rowsRt = new RectTransform[names.Length];
             for (int i = 0; i < names.Length; i++)
@@ -304,20 +336,20 @@ namespace JuiceKing.EditorTools
                 rowsRt[i] = row;
             }
 
-            var enter = UIRect("Enter", w, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 150f), new Vector2(700f, 160f));
+            var enter = UIRect("Enter", w, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 186f), new Vector2(700f, 150f));
             var enterBtn = AtlasButton(enter, _uBtnGreen ? _uBtnGreen : _sButton, 2.7f, false);
             var enterT = Label(Stretch("Text", enter, 40f, 40f, 0f, 24f), "ENTER TROPICAL FARM", 54f, Color.white, TextAlignmentOptions.Center, true);
             enterT.enableAutoSizing = true;
             enterT.fontSizeMin = 34f;
             enterT.fontSizeMax = 54f;
-            var stay = UIRect("Stay", w, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 56f), new Vector2(460f, 86f));
+            var stay = UIRect("Stay", w, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 92f), new Vector2(460f, 80f));
             var stayImg = Img(stay, _sWhite, new Color(1f, 1f, 1f, 0f), false, true);
             var stayBtn = stay.gameObject.AddComponent<Button>();
             stayBtn.targetGraphic = stayImg;
             Label(Stretch("Text", stay), "Stay a bit longer", 40f, new Color(0.55f, 0.42f, 0.34f), TextAlignmentOptions.Center, false);
 
             var cp = popRoot.gameObject.AddComponent<CompletionPopup>();
-            cp.closeButton = CloseHotspot(w, popSprite, _uPanelGold ? "panel_gold" : "panel_plain", panelScale);
+            cp.closeButton = CloseHotspot(w, popSprite, popSprite ? popSprite.name : "", panelScale);
             cp.window = w;
             cp.dim = dim;
             cp.crown = crown;
@@ -330,6 +362,103 @@ namespace JuiceKing.EditorTools
             cp.enterText = enterT;
             cp.stayButton = stayBtn;
             return cp;
+        }
+
+        // ================================================================== fox chip + premium popup (Berry Blast)
+
+        /// <summary>Fox chip on the left edge (under the parcel button) while a raided farm regrows.</summary>
+        static FoxHUD BuildFoxHUD(RectTransform safe)
+        {
+            var holder = Stretch("Fox", safe);
+            var rt = UIRect("FoxButton", holder, new Vector2(0f, 1f), new Vector2(0.5f, 0.5f), new Vector2(96f, -940f), new Vector2(150f, 150f));
+            var btn = AtlasButton(rt, _uSqOrange ? _uSqOrange : (_uSqWood ? _uSqWood : _sButton), 1.35f);
+            var ic = UIRect("Icon", rt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 6f), new Vector2(118f, 118f));
+            Img(ic, _sFox ? _sFox : _sStar, Color.white);
+            var lab = UIRect("Label", rt, new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), new Vector2(0f, 8f), new Vector2(230f, 50f));
+            var t = Label(lab, "5:00", 36f, Color.white, TextAlignmentOptions.Center, true);
+            var badge = UIRect("Badge", rt, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-8f, -8f), new Vector2(58f, 58f));
+            Img(badge, _sCircle, new Color(1f, 0.25f, 0.22f));
+            Label(Stretch("Text", badge, 0f, 0f, 2f, 6f), "!", 44f, Color.white, TextAlignmentOptions.Center, true);
+            var hud = holder.gameObject.AddComponent<FoxHUD>();
+            hud.root = rt;
+            hud.button = btn;
+            hud.icon = ic;
+            hud.timerText = t;
+            return hud;
+        }
+
+        /// <summary>
+        /// "Fix it now" card: pay with Golden Apples or watch a video. Uses Atlas4's fox panel (fox peeking over a bush, red
+        /// title ribbon, painted X) at its own width, so only the plain body stretches; the layout is stacked top to bottom
+        /// with clear gaps: ribbon title, raided berry, message, regrow timer, then the two buttons above the frame.
+        /// </summary>
+        static PremiumPopup BuildPremiumPopup(Transform root)
+        {
+            var popRoot = Stretch("PremiumPopup", root);
+            var dim = Img(popRoot, _sWhite, new Color(0.05f, 0.04f, 0.08f, 0.62f), false, true);
+            dim.preserveAspect = false;
+            var fox = UIKit.Get("b_panel_fox");
+            var sprite = fox != null ? fox : (_uPanelGold ? _uPanelGold : _uPanelPlain);
+            float panelScale = fox != null ? 3.4f : PanelScale(sprite);
+            float width = fox != null ? fox.rect.width * panelScale : 860f;
+            const float height = 1340f;
+            var w = UIRect("Window", popRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 20f), new Vector2(width, height));
+            Sliced(w, sprite ? sprite : _sPanel, panelScale, null, true);
+            float titleY = -(PlankY(sprite) + 4f) * panelScale;
+            var title = Label(UIRect("Title", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(40f, titleY), new Vector2(560f, 90f)),
+                "FOX ATTACK!", 56f, Color.white, TextAlignmentOptions.Center, true);
+            title.enableAutoSizing = true;
+            title.fontSizeMin = 36f;
+            title.fontSizeMax = 56f;
+            // Top of the cream body (below the ribbon).
+            float bodyTop = fox != null ? -(fox.border.w + 6f) * panelScale : -260f;
+
+            var rays = UIRect("Rays", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, bodyTop - 140f), new Vector2(340f, 340f));
+            Img(rays, _sRays, new Color(1f, 0.6f, 0.3f, 0.6f));
+            rays.gameObject.AddComponent<UISpin>().speed = 16f;
+            var icon = UIRect("Icon", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, bodyTop - 140f), new Vector2(200f, 200f));
+            var iconImg = Img(icon, _sFox ? _sFox : _sStar, Color.white);
+            var body = Label(UIRect("Body", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, bodyTop - 330f), new Vector2(width - 170f, 150f)),
+                "", 40f, UiInk, TextAlignmentOptions.Center, false);
+            body.enableAutoSizing = true;
+            body.fontSizeMin = 28f;
+            body.fontSizeMax = 40f;
+            body.textWrappingMode = TextWrappingModes.Normal;
+            var live = Label(UIRect("Live", w, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, bodyTop - 450f), new Vector2(width - 200f, 60f)),
+                "Regrows in 5:00", 44f, new Color(0.9f, 0.4f, 0.15f), TextAlignmentOptions.Center, false);
+
+            // Buttons (pivot at their bottom edge): the bottom frame is ~26 source px, so the lower one starts above it
+            // and the upper one sits 30 px higher, leaving room for the timer above.
+            float frameB = (fox != null ? fox.border.y : 30f) * panelScale;
+            float vbBottom = frameB + 36f, abBottom = vbBottom + 128f + 30f;
+            var vb = UIRect("Video", w, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, vbBottom), new Vector2(540f, 128f));
+            var vbBtn = AtlasButton(vb, _uBtnGreen ? _uBtnGreen : _sButton, 2.3f, false);
+            var vbIcon = UIRect("Ad", vb, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(80f, 4f), new Vector2(92f, 92f));
+            Img(vbIcon, _uWatchAd ? _uWatchAd : _sAd, Color.white);
+            Label(Stretch("Text", vb, 140f, 36f, 0f, 18f), "WATCH AD", 50f, Color.white, TextAlignmentOptions.Center, true).enableAutoSizing = true;
+
+            var ab = UIRect("Apples", w, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, abBottom), new Vector2(600f, 140f));
+            var abBtn = AtlasButton(ab, _uBtnYellow ? _uBtnYellow : _sButton, 2.5f, false);
+            Label(Stretch("Text", ab, 36f, 200f, 0f, 20f), "RESTORE", 54f, Color.white, TextAlignmentOptions.Center, true).enableAutoSizing = true;
+            // Cost chip on the right: "3" + apple, inside the button's rounded end.
+            var abIcon = UIRect("Icon", ab, new Vector2(1f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-66f, 6f), new Vector2(86f, 86f));
+            Img(abIcon, _sApple ? _sApple : _sStar, Color.white);
+            var cost = Label(UIRect("Cost", ab, new Vector2(1f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-146f, 8f), new Vector2(70f, 80f)),
+                "3", 58f, Color.white, TextAlignmentOptions.Center, true);
+
+            var pp = popRoot.gameObject.AddComponent<PremiumPopup>();
+            pp.window = w;
+            pp.dim = dim;
+            pp.icon = iconImg;
+            pp.iconRect = icon;
+            pp.titleText = title;
+            pp.bodyText = body;
+            pp.liveText = live;
+            pp.appleButton = abBtn;
+            pp.appleCostText = cost;
+            pp.adButton = vbBtn;
+            pp.closeButton = CloseHotspot(w, sprite, sprite ? sprite.name : "", panelScale);
+            return pp;
         }
 
         // ================================================================== intro

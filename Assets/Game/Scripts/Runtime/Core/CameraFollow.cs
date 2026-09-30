@@ -68,9 +68,16 @@ namespace JuiceKing
             transform.SetPositionAndRotation(_base, Quaternion.LookRotation(-offset.normalized, Vector3.up));
         }
 
+        static readonly int OccluderId = Shader.PropertyToID("_JKOccluder");
+
+        void OnDisable() => Shader.SetGlobalVector(OccluderId, Vector4.zero);
+
         void LateUpdate()
         {
             if (target == null) return;
+            // Tall decor between the camera and the player dithers out around them (JuiceKing/Stylized, _SEE_THROUGH).
+            var tp = target.position;
+            Shader.SetGlobalVector(OccluderId, new Vector4(tp.x, tp.y + 1f, tp.z, 1f));
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
 

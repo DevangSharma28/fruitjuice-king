@@ -19,7 +19,9 @@ namespace JuiceKing
         public Collider blocker;
 
         public State state { get; private set; } = State.Ready;
-        public bool IsReady => state == State.Ready;
+        public bool IsReady => state == State.Ready && !Damaged;
+        /// <summary>Raided by a fox: stays bare until <see cref="Restore"/>.</summary>
+        public bool Damaged { get; private set; }
         public float Hp01 => _hp / _maxHp;
 
         float _hp, _maxHp, _regrow, _lastHit;
@@ -46,7 +48,7 @@ namespace JuiceKing
         void Update()
         {
             float dt = Time.deltaTime;
-            if (state == State.Empty)
+            if (state == State.Empty && !Damaged)
             {
                 _regrow -= dt * Boosts.WorkMult;
                 if (_regrow <= 0f) Grow();
@@ -71,7 +73,7 @@ namespace JuiceKing
 
         public void Hit(float damage, Carrier by, Vector3 contact)
         {
-            if (state != State.Ready) return;
+            if (state != State.Ready || Damaged) return;
             _hp -= damage;
             _lastHit = Time.time;
             _wobble = 1f;
@@ -109,6 +111,34 @@ namespace JuiceKing
 
             OnBreak(by != null && by.isPlayer);
         }
+
+        /// <summary>A fox tore through: the fruit is gone and nothing grows until the farm is restored.</summary>
+        public void Damage()
+        {
+            if (Damaged) return;
+            Damaged = true;
+            if (hpBar != null) hpBar.gameObject.SetActive(false);
+            if (blocker != null) blocker.enabled = false;
+            if (state != State.Empty)
+            {
+                state = State.Empty;
+                Tweener.Kill(visual);
+                Tweener.Scale(visual, visual.localScale, Vector3.zero, 0.2f, Ease.InQuad, () => visual.gameObject.SetActive(false));
+            }
+            OnDamaged();
+        }
+
+        /// <summary>Back to health: grows again after <paramref name="delay"/> seconds.</summary>
+        public void Restore(float delay)
+        {
+            if (!Damaged) return;
+            Damaged = false;
+            _regrow = delay;
+            OnRestored();
+        }
+
+        protected virtual void OnDamaged() { }
+        protected virtual void OnRestored() { }
 
         /// <summary>Extra feedback per chainsaw hit (tree shake, falling leaves...).</summary>
         protected virtual void OnHit(bool player) { }

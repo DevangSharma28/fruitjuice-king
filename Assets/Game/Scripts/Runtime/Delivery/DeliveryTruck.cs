@@ -27,6 +27,9 @@ namespace JuiceKing
         public AudioSource engine;
         public TruckBoard board;
         public float maxSpeed = 7f;
+        [Tooltip("Red tail lights that glow while braking (optional).")]
+        public Renderer[] brakeLights;
+        public Material brakeOn, brakeOff;
 
         public State state { get; private set; } = State.Hidden;
         public event Action Arrived;
@@ -41,10 +44,17 @@ namespace JuiceKing
         Quaternion _doorClosed;
         Vector3 _fillScale;
         float _fillShown, _fillTarget;
+        Quaternion _bodyRot;
+        float _pitch, _pitchVel, _roll, _lastSpeed, _lastYaw;
+        bool _braking;
 
         void Awake()
         {
-            if (body != null) _bodyBase = body.localPosition;
+            if (body != null)
+            {
+                _bodyBase = body.localPosition;
+                _bodyRot = body.localRotation;
+            }
             if (door != null) _doorClosed = door.localRotation;
             if (cargoFill != null) _fillScale = cargoFill.localScale;
             if (engine != null)
@@ -131,6 +141,14 @@ namespace JuiceKing
             }, null, Vector3.one * 0.5f);
         }
 
+        /// <summary>A heavy parcel was loaded aboard: the suspension dips and settles.</summary>
+        public void TakeCargo()
+        {
+            _pitchVel -= 40f;
+            SetFill(1f);
+            Fx.Dust(transform.position, 4);
+        }
+
         void SetLights(bool on)
         {
             if (lights == null) return;
@@ -160,11 +178,30 @@ namespace JuiceKing
                 ApplyFill();
             }
 
-            // Idle rumble + exhaust.
-            if (body != null && state != State.Hidden)
+            // Suspension: the body pitches with acceleration (nose dips when braking), leans into turns, and settles
+            // on a damped spring; plus an idle engine rumble.
+            if (body != null && state != State.Hidden && dt > 0f)
             {
+                float accel = (_speed - _lastSpeed) / dt;
+                _lastSpeed = _speed;
+                float yaw = transform.eulerAngles.y;
+                float yawRate = Mathf.DeltaAngle(_lastYaw, yaw) / dt;
+                _lastYaw = yaw;
+                float pitchGoal = Mathf.Clamp(-accel * 0.9f, -4f, 4f);
+                _pitchVel += ((pitchGoal - _pitch) * 90f - _pitchVel * 9f) * dt;
+                _pitch += _pitchVel * dt;
+                _roll = Mathf.Lerp(_roll, Mathf.Clamp(-yawRate * 0.05f * Mathf.Clamp01(_speed / 3f), -4f, 4f), 1f - Mathf.Exp(-6f * dt));
                 float rumble = state == State.Parked ? 0.006f : 0.012f;
                 body.localPosition = _bodyBase + Vector3.up * (Mathf.Sin(Time.time * 32f) * rumble);
+                body.localRotation = _bodyRot * Quaternion.Euler(_pitch, 0f, _roll);
+
+                bool braking = state == State.Arriving && accel < -0.5f;
+                if (braking != _braking && brakeLights != null)
+                {
+                    _braking = braking;
+                    foreach (var l in brakeLights)
+                        if (l != null) l.sharedMaterial = braking ? brakeOn : brakeOff;
+                }
             }
             if (state != State.Hidden && exhaust != null)
             {
@@ -201,8 +238,9 @@ namespace JuiceKing
             float remaining = dist;
             for (int i = _pi; i < _path.Count - 1; i++) remaining += Vector3.Distance(_path[i], _path[i + 1]);
             float goal = maxSpeed;
-            if (state == State.Arriving) goal = Mathf.Lerp(0.6f, maxSpeed, Mathf.Clamp01(remaining / 7f));
-            _speed = Mathf.MoveTowards(_speed, goal, dt * (state == State.Departing ? 4f : 8f));
+            // Arriving: brake on a constant deceleration so the truck glides to a stop exactly at the bay.
+            if (state == State.Arriving) goal = Mathf.Min(maxSpeed, Mathf.Sqrt(2f * 3.2f * remaining) + 0.15f);
+            _speed = Mathf.MoveTowards(_speed, goal, dt * (state == State.Departing ? 3.2f : 8f));
 
             float step = _speed * dt;
             if (dist <= step)

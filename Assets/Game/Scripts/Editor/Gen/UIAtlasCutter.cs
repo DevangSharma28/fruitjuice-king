@@ -17,6 +17,7 @@ namespace JuiceKing.EditorTools
 
         class Src
         {
+            public string path;
             public Color32[] px;
             public int w, h;
             public Color32 Get(int x, int y) => px[(h - 1 - y) * w + x]; // top-left origin
@@ -30,7 +31,7 @@ namespace JuiceKing.EditorTools
             if (Cache.TryGetValue(path, out var s)) return s;
             var t = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             t.LoadImage(File.ReadAllBytes(path));
-            s = new Src { px = t.GetPixels32(), w = t.width, h = t.height };
+            s = new Src { path = path, px = t.GetPixels32(), w = t.width, h = t.height };
             Object.DestroyImmediate(t);
             Cache[path] = s;
             return s;
@@ -38,11 +39,20 @@ namespace JuiceKing.EditorTools
 
         public static void ClearCache() => Cache.Clear();
 
+        static readonly Dictionary<string, RectInt> Clips = new Dictionary<string, RectInt>();
+
+        /// <summary>
+        /// Keep the flood fill for the item seeded at (x, y) inside <paramref name="r"/> (top-left coords). For items whose
+        /// decorations touch a neighbour in the atlas.
+        /// </summary>
+        public static void Clip(string atlas, int x, int y, RectInt r) => Clips[atlas + "@" + x + "," + y] = r;
+
         /// <summary>Flood-fill the opaque item around a seed. Returns its bounding box (top-left coords) and mask.</summary>
         static bool Isolate(Src s, int cx, int cy, int thresh, out RectInt box, out bool[] mask)
         {
             box = default;
             mask = null;
+            bool clipped = Clips.TryGetValue(s.path + "@" + cx + "," + cy, out var clip);
             // Nearest opaque pixel to the seed.
             int sx = -1, sy = -1;
             for (int r = 0; r <= 40 && sx < 0; r++)
@@ -52,6 +62,7 @@ namespace JuiceKing.EditorTools
                 if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) != r) continue;
                 int x = cx + dx, y = cy + dy;
                 if (x < 0 || y < 0 || x >= s.w || y >= s.h || s.A(x, y) < thresh) continue;
+                if (clipped && !clip.Contains(new Vector2Int(x, y))) continue;
                 sx = x;
                 sy = y;
                 break;
@@ -80,6 +91,7 @@ namespace JuiceKing.EditorTools
                     if (nx < 0 || ny < 0 || nx >= s.w || ny >= s.h) continue;
                     int ni = ny * s.w + nx;
                     if (seen[ni] || s.A(nx, ny) < thresh) continue;
+                    if (clipped && !clip.Contains(new Vector2Int(nx, ny))) continue;
                     seen[ni] = true;
                     q.Enqueue(ni);
                 }

@@ -110,12 +110,26 @@ namespace JuiceKing.EditorTools
             // Juicers: everything except the animated bits.
             foreach (var j in _stations.GetComponentsInChildren<Juicer>(true))
             {
-                CombineUnder(j.body, j.blades, j.liquid, j.statusLight != null ? j.statusLight.transform : null);
+                if (j is BerryPress bp)
+                {
+                    // Keep every animated part of the press separate.
+                    var keep = new List<Transform> { bp.drum, bp.piston, bp.gaugeNeedle, bp.statusLight != null ? bp.statusLight.transform : null };
+                    if (bp.pipeBlobs != null) keep.AddRange(bp.pipeBlobs);
+                    if (bp.ringLights != null) foreach (var r in bp.ringLights) if (r != null) keep.Add(r.transform);
+                    CombineUnder(j.body, keep.ToArray());
+                }
+                else CombineUnder(j.body, j.blades, j.liquid, j.statusLight != null ? j.statusLight.transform : null);
                 var tray = j.transform.Find("Tray");
                 if (tray != null) CombineUnder(tray, tray.Find("OutputPile"));
                 if (j.hopper != null) CombineUnder(j.hopper);
-                if (j.sign != null) CombineUnder(j.sign);
+                if (j.sign != null) CombineUnder(j.sign, (j as BerryPress)?.crown);
             }
+
+            // Cake mixers and ovens: merge the static shell, keep what moves or swaps material.
+            foreach (var m in _stations.GetComponentsInChildren<CakeMixer>(true))
+                CombineUnder(m.transform.Find("Body"), m.head, m.bowl, m.flourSack, m.statusLight != null ? m.statusLight.transform : null);
+            foreach (var o in _stations.GetComponentsInChildren<Oven>(true))
+                CombineUnder(o.body, o.door, o.glow != null ? o.glow.transform : null, o.dial, o.timerFill, o.chimney);
 
             // Counter body (punches as one piece on upgrade), bin body, sign board.
             foreach (var c in _stations.GetComponentsInChildren<Counter>(true))

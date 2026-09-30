@@ -20,17 +20,23 @@ namespace JuiceKing
         public CashPile cash;
         [Tooltip("Upgrade shop pad (pointed at when an upgrade is affordable).")]
         public UpgradeZone upgradeZone;
+        [Header("Berry Cake Shop (first cake guide)")]
+        public CakeMixer firstCakeMixer;
+        public Oven firstOven;
+        public Counter cakeCounter;
 
         Carrier _player;
         Vector3 _arrowBase;
+        float _arrowSpin;
         Vector3 _pointerScale = Vector3.one;
         float _ringT;
         Vector3? _lastTarget;
         int _lastStep = -1;
         long _stepMoney;
 
-        static readonly string[] Plural = { "oranges", "watermelons", "pineapples", "coconuts", "mangoes", "bananas", "papayas" };
-        string MachineWord => Economy.World == 0 ? "juicer" : "mixer";
+        static readonly string[] Plural =
+            { "oranges", "watermelons", "pineapples", "coconuts", "mangoes", "bananas", "papayas", "strawberries", "raspberries", "blueberries", "cranberries" };
+        string MachineWord => Economy.World == 0 ? "juicer" : Economy.World == 1 ? "mixer" : "berry press";
 
         void Start()
         {
@@ -109,23 +115,26 @@ namespace JuiceKing
             }
 
             // First delivery: walk the player through loading a truck.
-            var dm = DeliveryManager.I;
+            var dm = DeliveryManager.Focus();
             if (step >= 5 && dm != null && dm.Loading && gm.data.stats.deliveries == 0 && dm.bay != null && dm.bay.loadZone != null)
             {
-                var want = ItemTypes.Juice(dm.Order.kind);
-                string juice = Balance.JuiceNames[(int)dm.Order.kind];
+                var want = dm.Order.Item;
+                string goods = dm.Order.Name;
+                bool box = dm.bay.box != null;
                 if (_player.Contains(t => t == want))
                 {
-                    text = "Load the " + juice + " into the truck!";
+                    text = "Load the " + goods + (box ? " into the box!" : " into the truck!");
                     target = dm.bay.loadZone.transform.position;
                 }
                 else
                 {
-                    text = "A truck wants " + dm.Order.qty + " " + juice + " - grab some!";
-                    var j = FindJuicer(dm.Order.kind);
-                    target = j != null ? j.outputZone.transform.position : dm.bay.loadZone.transform.position;
+                    text = "A truck wants " + dm.Order.qty + " " + goods + " - grab some!";
+                    var j = FindProducer(want);
+                    target = j != null ? j.OutputZone.transform.position : dm.bay.loadZone.transform.position;
                 }
             }
+
+            if (step >= 6) CakeGuide(gm, ref text, ref target);
 
             // Carrying slices nobody can juice yet: point at the trash bin so the player is never stuck.
             var bin = TrashBin.I;
@@ -134,7 +143,7 @@ namespace JuiceKing
                 for (int i = 0; i < _player.items.Count; i++)
                 {
                     var t = _player.items[i].type;
-                    if (!t.IsSlice() || gm.HasJuicer(t.Fruit())) continue;
+                    if (!t.IsSlice() || gm.HasJuicer(t.Fruit()) || gm.HasCakeMixer(t.Fruit())) continue;
                     text = "No " + Balance.FruitNames[(int)t.Fruit()] + " " + MachineWord + " yet! Toss them in the trash";
                     target = bin.zone != null ? bin.zone.transform.position : bin.transform.position;
                     break;
@@ -156,6 +165,18 @@ namespace JuiceKing
             var up = CheapestUpgrade(out int upDone, out int upTotal);
             bool shopOpen = upgradeZone != null && upgradeZone.isActiveAndEnabled;
             bool canUpgrade = shopOpen && up != null && money >= up.Cost();
+
+            // A fox wrecked a farm: point at its restore pad (an affordable unlock still comes first).
+            var raid = FoxRaid.I;
+            var hurt = raid != null && !raid.Raiding ? raid.FirstDamaged() : null;
+            if (hurt != null && (next == null || money < next.Remaining))
+            {
+                var farm = raid.FarmOf(hurt);
+                text = "Fox damage! Restore the " + (string.IsNullOrEmpty(hurt.displayName) ? "farm" : hurt.displayName) + " (" + FoxRaid.Clock(raid.TimeLeft(hurt)) + ")";
+                key = "fox:" + hurt.kind;
+                if (farm != null && farm.restorePad != null) target = farm.restorePad.transform.position;
+                return;
+            }
 
             if (next != null)
             {
@@ -183,7 +204,10 @@ namespace JuiceKing
             // Every pad is open: the last stretch is maxing the upgrades.
             if (up == null) return;
             var em = ExpansionManager.I;
-            string goal = em != null && em.nextExpansion == 1 ? "to open the Tropical Farm" : em != null && em.nextExpansion > 1 ? "to open the next world" : "to master the island";
+            string goal = em != null && em.nextExpansion == 1 ? "to open the Tropical Farm"
+                : em != null && em.nextExpansion == 2 ? "to open the Berry Blast"
+                : em != null && em.nextExpansion > 2 ? "to open the next world"
+                : Economy.World >= 2 ? "to become the Berry Cake Empire" : "to master the island";
             text = "Max every upgrade " + goal + "! " + upDone + "/" + upTotal;
             key = "max";
             if (canUpgrade) target = upgradeZone.transform.position;
@@ -211,14 +235,53 @@ namespace JuiceKing
             return best;
         }
 
-        Juicer _cachedJuicer;
+        IProducer _cachedProducer;
 
-        Juicer FindJuicer(FruitKind k)
+        /// <summary>The open machine that makes <paramref name="item"/> (juicer, press or oven).</summary>
+        IProducer FindProducer(ItemType item)
         {
-            if (_cachedJuicer != null && _cachedJuicer.kind == k && _cachedJuicer.isActiveAndEnabled) return _cachedJuicer;
+            if (_cachedProducer != null && _cachedProducer.OutputType == item && _cachedProducer.IsActive) return _cachedProducer;
             foreach (var j in FindObjectsByType<Juicer>(FindObjectsSortMode.None))
-                if (j.kind == k && j.isActiveAndEnabled) return _cachedJuicer = j;
+                if (j.OutputType == item && j.isActiveAndEnabled) return _cachedProducer = j;
+            foreach (var o in FindObjectsByType<Oven>(FindObjectsSortMode.None))
+                if (o.OutputType == item && o.IsActive) return _cachedProducer = o;
             return null;
+        }
+
+        /// <summary>Until the first cake is sold: berries into the cake mixer, the oven bakes, cake into the pastry case.</summary>
+        void CakeGuide(GameManager gm, ref string text, ref Vector3? target)
+        {
+            if (firstCakeMixer == null || firstOven == null || cakeCounter == null) return;
+            if (!firstCakeMixer.isActiveAndEnabled || !firstOven.isActiveAndEnabled || gm.data.cakesSold > 0) return;
+            if (UnlockManager.FirstAvailable() is UnlockZone z && gm.Money >= z.Remaining) return;
+            var cake = firstOven.OutputType;
+            var berry = firstCakeMixer.InputType;
+            string berries = Plural[(int)firstCakeMixer.kind];
+            if (_player.Contains(t => t == cake))
+            {
+                text = "Put the cake in the pastry case!";
+                target = cakeCounter.dropZone.transform.position;
+            }
+            else if (firstOven.Available > 0)
+            {
+                text = "Your first cake is ready - grab it!";
+                target = firstOven.outputZone.transform.position;
+            }
+            else if (firstOven.Working || firstCakeMixer.Working || firstCakeMixer.outputPile.Count > 0)
+            {
+                text = "The oven is baking your cake...";
+                target = firstOven.outputZone.transform.position;
+            }
+            else if (_player.Contains(t => t == berry))
+            {
+                text = "Drop the " + berries + " into the cake mixer";
+                target = firstCakeMixer.inputZone.transform.position;
+            }
+            else
+            {
+                text = "Bake a cake! Bring " + berries + " to the cake mixer";
+                target = firstCakeMixer.inputZone.transform.position;
+            }
         }
 
         void Advance()
@@ -240,7 +303,18 @@ namespace JuiceKing
                     float bounce = Mathf.Abs(Mathf.Sin(time * 4f));
                     p.y = Mathf.Max(p.y, 0f) + 2.3f + bounce * 0.55f;
                     arrow.position = p;
-                    arrow.Rotate(0f, 90f * Time.deltaTime, 0f, Space.World);
+                    // Spin, leaning back towards the camera so the arrow keeps its silhouette where the camera looks
+                    // steeply down on it (targets near the bottom of the screen read as a blob otherwise).
+                    _arrowSpin += 90f * Time.deltaTime;
+                    Vector3 down = Vector3.down;
+                    var cam = GameRefs.I != null ? GameRefs.I.mainCamera : null;
+                    if (cam != null)
+                    {
+                        Vector3 view = (p - cam.transform.position).normalized;
+                        Vector3 side = Vector3.down - Vector3.Dot(Vector3.down, view) * view;
+                        if (side.sqrMagnitude > 0.0001f) down = Vector3.Slerp(Vector3.down, side.normalized, 0.6f);
+                    }
+                    arrow.rotation = Quaternion.AngleAxis(_arrowSpin, down) * Quaternion.FromToRotation(Vector3.down, down);
                     // Squash when it "lands".
                     float sq = 1f + (1f - bounce) * 0.12f;
                     arrow.localScale = new Vector3(_arrowScale.x * sq, _arrowScale.y / sq, _arrowScale.z * sq);

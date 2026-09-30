@@ -21,8 +21,19 @@ namespace JuiceKing
 
         [Header("Progress")]
         public Image progressFill;
+        [Tooltip("Glossy top half of the progress fill (filled in step with it).")]
+        public Image progressGloss;
         public TextMeshProUGUI progressText;
         public RectTransform progressPanel;
+        [Tooltip("Glint that sweeps across the filled bar when progress grows (and now and then while idle).")]
+        public RectTransform progressShine;
+
+        [Header("Golden Apples")]
+        public TextMeshProUGUI applesText;
+        public RectTransform applesIcon;
+        public RectTransform applesPanel;
+        [Tooltip("Flying apple (disabled template, cloned and pooled).")]
+        public Image appleTemplate;
 
         [Header("Toast")]
         public RectTransform toastPanel;
@@ -38,7 +49,13 @@ namespace JuiceKing
         string _objectiveKey;
         float _progressShown = -1f;
         int _progressPct = -1;
+        float _lastGoal = -1f;
+        float _shineT = -1f;
+        float _shineIdle = 2.5f;
         readonly Stack<Image> _coinPool = new Stack<Image>();
+        readonly Stack<Image> _applePool = new Stack<Image>();
+        int _applesShown = -1;
+        int _applesFlying;
         Canvas _canvas;
         int _flying;
 
@@ -55,6 +72,7 @@ namespace JuiceKing
             }
             _canvas = GetComponentInParent<Canvas>();
             if (coinTemplate != null) coinTemplate.gameObject.SetActive(false);
+            if (appleTemplate != null) appleTemplate.gameObject.SetActive(false);
         }
 
         void Start()
@@ -63,6 +81,8 @@ namespace JuiceKing
             _shown = gm.Money;
             moneyText.text = UnlockZone.Format(gm.Money);
             gm.MoneyChanged += OnMoney;
+            gm.ApplesChanged += OnApples;
+            SetApples(gm.Apples);
             UnlockManager.ZoneUnlocked += OnUnlocked;
             if (soundButton != null) soundButton.onClick.AddListener(ToggleSound);
             RefreshSound();
@@ -73,13 +93,82 @@ namespace JuiceKing
 
         void OnDestroy()
         {
-            if (GameManager.I != null) GameManager.I.MoneyChanged -= OnMoney;
+            if (GameManager.I != null)
+            {
+                GameManager.I.MoneyChanged -= OnMoney;
+                GameManager.I.ApplesChanged -= OnApples;
+            }
             UnlockManager.ZoneUnlocked -= OnUnlocked;
         }
 
         void OnMoney(long value, long delta)
         {
             if (delta > 0 && moneyIcon != null && _flying == 0) Tweener.Punch(moneyIcon, 0.25f, 0.2f, Vector3.one);
+        }
+
+        void OnApples(int value, int delta)
+        {
+            // While apples are flying in, the counter ticks up as each one lands.
+            if (delta > 0 && _applesFlying > 0) return;
+            SetApples(value);
+            if (applesPanel != null) Tweener.Punch(applesPanel, delta > 0 ? 0.2f : 0.12f, 0.3f, Vector3.one);
+        }
+
+        void SetApples(int v)
+        {
+            if (applesText == null || v == _applesShown) return;
+            _applesShown = v;
+            applesText.text = v.ToString("N0");
+        }
+
+        /// <summary>Golden Apples fly from a world point to the apple counter; the counter ticks up as they land.</summary>
+        public void FlyApples(Vector3 worldPos, int count)
+        {
+            var cam = GameRefs.I != null ? GameRefs.I.mainCamera : Camera.main;
+            if (appleTemplate == null || coinLayer == null || applesIcon == null || cam == null)
+            {
+                SetApples(GameManager.I.Apples);
+                return;
+            }
+            Vector3 sp = cam.WorldToScreenPoint(worldPos);
+            if (sp.z < 0f) sp = new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 1f);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(coinLayer, sp, null, out var from);
+            Vector2 to = coinLayer.InverseTransformPoint(applesIcon.position);
+            int start = Mathf.Max(0, GameManager.I.Apples - count);
+            SetApples(start);
+            int shown = Mathf.Min(count, 8);
+            for (int i = 0; i < shown; i++)
+            {
+                var img = _applePool.Count > 0 ? _applePool.Pop() : Instantiate(appleTemplate, coinLayer);
+                img.gameObject.SetActive(true);
+                var rt = img.rectTransform;
+                Vector2 s0 = from + Random.insideUnitCircle * 50f;
+                Vector2 mid = Vector2.Lerp(s0, to, 0.35f) + new Vector2(Random.Range(-200f, 200f), Random.Range(120f, 260f));
+                rt.anchoredPosition = s0;
+                rt.localScale = Vector3.zero;
+                _applesFlying++;
+                float dur = Random.Range(0.7f, 0.85f);
+                float delay = 0.15f + i * 0.09f;
+                int landValue = i == shown - 1 ? GameManager.I.Apples : start + Mathf.CeilToInt((i + 1) * count / (float)shown);
+                float pitch = 1.1f + i * 0.06f;
+                Tweener.Value(rt, dur, t =>
+                {
+                    float e = Ease.InOutQuad(t);
+                    Vector2 a = Vector2.Lerp(s0, mid, e), b = Vector2.Lerp(mid, to, e);
+                    rt.anchoredPosition = Vector2.Lerp(a, b, e);
+                    float sc = t < 0.25f ? Mathf.Lerp(0f, 1.35f, Ease.OutBack(t / 0.25f)) : Mathf.Lerp(1.35f, 0.75f, (t - 0.25f) / 0.75f);
+                    rt.localScale = Vector3.one * sc;
+                    rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * 12f) * 18f);
+                }, () =>
+                {
+                    img.gameObject.SetActive(false);
+                    _applePool.Push(img);
+                    _applesFlying--;
+                    SetApples(landValue);
+                    if (applesIcon != null) Tweener.Punch(applesIcon, 0.3f, 0.22f, Vector3.one);
+                    Sfx.Play(SfxId.Chime, 0.25f, pitch);
+                }, delay);
+            }
         }
 
         void OnUnlocked(UnlockZone z)
@@ -107,6 +196,10 @@ namespace JuiceKing
                 float goal = done / (float)total;
                 _progressShown = _progressShown < 0f ? goal : Mathf.MoveTowards(_progressShown, goal, Time.deltaTime * 0.6f);
                 progressFill.fillAmount = _progressShown;
+                if (progressGloss != null) progressGloss.fillAmount = _progressShown;
+                if (_lastGoal >= 0f && goal > _lastGoal + 0.0001f) _shineT = 0f;
+                _lastGoal = goal;
+                UpdateShine();
                 if (progressText != null)
                 {
                     int pct = done >= total ? 100 : Mathf.Min(99, Mathf.FloorToInt(goal * 100f));
@@ -116,6 +209,35 @@ namespace JuiceKing
                         progressText.text = done >= total ? "MAX" : pct + "%";
                     }
                 }
+            }
+        }
+
+        void UpdateShine()
+        {
+            if (progressShine == null) return;
+            float dt = Time.unscaledDeltaTime;
+            if (_shineT < 0f)
+            {
+                _shineIdle -= dt;
+                if (_shineIdle > 0f || _progressShown <= 0.02f)
+                {
+                    if (progressShine.gameObject.activeSelf) progressShine.gameObject.SetActive(false);
+                    return;
+                }
+                _shineT = 0f;
+            }
+            _shineIdle = 7f;
+            if (!progressShine.gameObject.activeSelf) progressShine.gameObject.SetActive(true);
+            _shineT += dt;
+            float k = Mathf.Clamp01(_shineT / 0.8f);
+            k = k * k * (3f - 2f * k);
+            // The fill masks the glint, so it only shows across the gold part of the bar.
+            float w = ((RectTransform)progressShine.parent).rect.width;
+            progressShine.anchoredPosition = new Vector2(Mathf.Lerp(-50f, w * Mathf.Max(0.1f, _progressShown) + 50f, k), 0f);
+            if (_shineT >= 0.8f)
+            {
+                _shineT = -1f;
+                progressShine.gameObject.SetActive(false);
             }
         }
 
@@ -145,6 +267,13 @@ namespace JuiceKing
         public void Toast(string msg, Sprite icon = null, float hold = 2.6f)
         {
             if (toastPanel == null) return;
+            // The NEW! banner uses the same spot: show the toast once it has gone.
+            float wait = UnlockBanner.BusyUntil - Time.unscaledTime;
+            if (wait > 0f)
+            {
+                Tweener.Delay(wait + 0.05f, () => { if (this != null) Toast(msg, icon, hold); });
+                return;
+            }
             int serial = ++_toastSerial;
             toastText.text = msg;
             if (toastIcon != null)
@@ -163,6 +292,15 @@ namespace JuiceKing
                 Tweener.Value(toastPanel, 0.25f, t => toastPanel.anchoredPosition = Vector2.Lerp(_toastShown, hidden, t),
                     () => { if (serial == _toastSerial) toastPanel.gameObject.SetActive(false); });
             });
+        }
+
+        /// <summary>Slide the toast away now (the unlock banner is taking its place).</summary>
+        public void HideToast()
+        {
+            if (toastPanel == null || !toastPanel.gameObject.activeSelf) return;
+            _toastSerial++;
+            Tweener.Kill(toastPanel);
+            toastPanel.gameObject.SetActive(false);
         }
 
         /// <summary>Coins fly from a world position to the money counter.</summary>

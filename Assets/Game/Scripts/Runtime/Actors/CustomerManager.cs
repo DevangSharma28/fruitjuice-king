@@ -10,6 +10,10 @@ namespace JuiceKing
     /// </summary>
     public class CustomerManager : MonoBehaviour
     {
+        [Tooltip("What this queue buys: juice (juice counter) or cakes (Berry Cake Shop).")]
+        public ProductLine line;
+        [Tooltip("Customer looks for this queue (empty = the scene's juice customers).")]
+        public GameObject[] prefabs;
         public Transform[] entryPath;
         public Transform[] queueSlots;
         public Transform[] exitPath;
@@ -41,7 +45,7 @@ namespace JuiceKing
             var gm = GameManager.I;
 
             // Keep the line full: a new customer every fraction of a second while there is room.
-            if (gm.OrderableKinds.Count > 0 && _queue.Count < queueSlots.Length)
+            if (gm.Orderable(line).Count > 0 && _queue.Count < queueSlots.Length)
             {
                 _spawnT -= dt * Boosts.WorkMult;
                 if (_spawnT <= 0f)
@@ -60,7 +64,7 @@ namespace JuiceKing
                     _serveT = 0f;
                     if (!front.Done)
                     {
-                        var juice = counter.TakeJuice(front.want);
+                        var juice = counter.TakeProduct(front.want);
                         if (juice != null)
                         {
                             front.Give(juice);
@@ -78,16 +82,17 @@ namespace JuiceKing
         void Spawn()
         {
             var refs = GameRefs.I;
-            var kinds = GameManager.I.OrderableKinds;
+            var kinds = GameManager.I.Orderable(line);
             FruitKind kind = kinds[Random.Range(0, kinds.Count)];
-            int max = Economy.MaxOrder(GameManager.I.data.totalSold);
+            int max = line == ProductLine.Cake ? Economy.MaxCakeOrder(GameManager.I.data.cakesSold) : Economy.MaxOrder(GameManager.I.data.totalSold);
             int count = Random.Range(1, max + 1);
 
             // Avoid the same look twice in a row.
-            int pi = Random.Range(0, refs.customerPrefabs.Length);
-            if (pi == _lastPrefab) pi = (pi + 1) % refs.customerPrefabs.Length;
+            var looks = prefabs != null && prefabs.Length > 0 ? prefabs : refs.customerPrefabs;
+            int pi = Random.Range(0, looks.Length);
+            if (pi == _lastPrefab) pi = (pi + 1) % looks.Length;
             _lastPrefab = pi;
-            var prefab = refs.customerPrefabs[pi];
+            var prefab = looks[pi];
             var rot = Quaternion.LookRotation(_entry.Count > 1 ? _entry[1] - _entry[0] : Vector3.forward);
             var go = Pool.Spawn(prefab, _entry[0], rot);
             var c = go.GetComponent<Customer>();
@@ -101,13 +106,14 @@ namespace JuiceKing
             var gm = GameManager.I;
             if (c.got > 0)
             {
-                int price = gm.JuicePrice(c.want) * c.got;
+                int price = gm.ProductPrice(line, c.want) * c.got;
                 int tip = happy && Random.value < 0.3f ? Random.Range(1, 4) : 0;
                 float mult = Boosts.MoneyMult;
                 int total = Mathf.RoundToInt((price + tip) * mult);
                 Vector3 from = counter.servePoint.position + Vector3.up * 1.2f;
                 cash.Deposit(total, from);
-                gm.NotifyJuiceSold(c.got);
+                if (line == ProductLine.Cake) gm.NotifyCakeSold(c.got);
+                else gm.NotifyJuiceSold(c.got);
                 Sfx.Play(SfxId.Cash, 0.32f);
                 if (mult > 1f)
                     FloatingText.Show("x2!", from + Vector3.up * 0.8f, new Color(1f, 0.85f, 0.2f), 0.9f, 1f, 0.9f);

@@ -19,18 +19,22 @@ namespace JuiceKing
         public string[] clients;
     }
 
-    /// <summary>A delivery request: <see cref="qty"/> cups of one juice for a <see cref="reward"/>.</summary>
+    /// <summary>A delivery request: <see cref="qty"/> cups of one juice (or cakes of one kind) for a <see cref="reward"/>.</summary>
     [System.Serializable]
     public class DeliveryOrder
     {
         public TruckKind truck;
         public string client;
         public FruitKind kind;
+        public ProductLine line;
         public int qty;
         public int delivered;
         public long reward;
 
         public bool Done => delivered >= qty;
+        /// <summary>The item this order takes.</summary>
+        public ItemType Item => ItemTypes.Product(line, kind);
+        public string Name => line == ProductLine.Cake ? Balance.CakeNames[(int)kind] : Balance.JuiceNames[(int)kind];
         public int Remaining => Mathf.Max(0, qty - delivered);
         public float Progress => qty <= 0 ? 1f : Mathf.Clamp01(delivered / (float)qty);
     }
@@ -60,7 +64,9 @@ namespace JuiceKing
             return o;
         }
 
-        public static DeliveryOrder Generate(IReadOnlyList<FruitKind> kinds, bool premiumUnlocked)
+        public static DeliveryOrder Generate(IReadOnlyList<FruitKind> kinds, bool premiumUnlocked) => Generate(ProductLine.Juice, kinds, premiumUnlocked);
+
+        public static DeliveryOrder Generate(ProductLine line, IReadOnlyList<FruitKind> kinds, bool premiumUnlocked)
         {
             int nKinds = Mathf.Max(1, kinds.Count);
             TruckDef def = null;
@@ -87,21 +93,27 @@ namespace JuiceKing
             var o = new DeliveryOrder
             {
                 truck = def.kind,
-                client = def.clients[Random.Range(0, def.clients.Length)],
+                line = line,
+                client = line == ProductLine.Cake ? CakeClients[Random.Range(0, CakeClients.Length)] : def.clients[Random.Range(0, def.clients.Length)],
                 // Newer juices a bit more often so fresh unlocks matter.
                 kind = kinds[Random.value < 0.35f ? kinds.Count - 1 : Random.Range(0, kinds.Count)],
             };
             // Orders grow with the business: more juice lines, bigger trucks.
             float scale = Economy.DeliverySizeMult * (1f + 0.12f * (nKinds - 1));
-            o.qty = Mathf.RoundToInt(Random.Range(def.qty.x, def.qty.y + 1) * scale);
+            // A cake is a lot more work than a cup: cake trucks want about a third as many.
+            if (line == ProductLine.Cake) scale *= 0.35f;
+            o.qty = Mathf.Max(3, Mathf.RoundToInt(Random.Range(def.qty.x, def.qty.y + 1) * scale));
             o.reward = Reward(o);
             return o;
         }
 
+        static readonly string[] CakeClients = { "BIRTHDAY PARTY", "WEDDING", "TEA ROOM", "SCHOOL FAIR", "BAKERY CAFE", "VILLAGE FETE" };
+
         /// <summary>~2x the shop value of the same cups, times the truck bonus and the Truck Reward upgrade, rounded nicely.</summary>
         public static long Reward(DeliveryOrder o)
         {
-            float price = GameManager.I != null ? GameManager.I.JuicePrice(o.kind) : Balance.JuicePrice[(int)o.kind];
+            float price = GameManager.I != null ? GameManager.I.ProductPrice(o.line, o.kind)
+                : o.line == ProductLine.Cake ? Balance.CakePrice[(int)o.kind] : Balance.JuicePrice[(int)o.kind];
             float v = o.qty * price * Economy.DeliveryBaseMult * Def(o.truck).rewardMult * Economy.DeliveryRewardMult;
             long step = v > 20000 ? 500 : v > 2000 ? 100 : 50;
             return (long)Mathf.Max(step, Mathf.Round(v / step) * step);

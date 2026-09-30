@@ -8,15 +8,15 @@ SpriteAtlasImporter:
     compressionQuality: 0
     maxTextureSize: 0
     textureCompression: 0
-    filterMode: 1
-    generateMipMaps: 0
+    filterMode: 2
+    generateMipMaps: 1
     readable: 0
     crunchedCompression: 0
     sRGB: 1
   platformSettings: []
   packingSettings:
     serializedVersion: 2
-    padding: 4
+    padding: 8
     blockOffset: 0
     allowAlphaSplitting: 0
     enableRotation: 0

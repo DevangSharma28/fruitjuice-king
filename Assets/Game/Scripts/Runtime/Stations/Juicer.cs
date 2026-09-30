@@ -3,7 +3,7 @@ using UnityEngine;
 namespace JuiceKing
 {
     /// <summary>Turns fruit slices into juice cups.</summary>
-    public class Juicer : MonoBehaviour, IItemReceiver, IItemSource
+    public class Juicer : MonoBehaviour, IItemReceiver, IProducer
     {
         public FruitKind kind;
         public ItemPile inputPile;
@@ -32,7 +32,7 @@ namespace JuiceKing
         Vector3 _signPos;
         bool _ledState;
 
-        void Awake()
+        protected virtual void Awake()
         {
             if (body != null) _bodyScale = body.localScale;
             if (hopper != null) _hopperScale = hopper.localScale;
@@ -75,7 +75,10 @@ namespace JuiceKing
             });
         }
 
-        // ---------- IItemSource (output tray) ----------
+        // ---------- IProducer (output tray) ----------
+        public FruitKind Kind => kind;
+        public PickupZone OutputZone => outputZone;
+        public bool IsActive => isActiveAndEnabled;
         public int Available => outputPile.Count;
         public ItemType OutputType => ItemTypes.Juice(kind);
         public StackItem Take(Carrier to) => outputPile.TakeLast();
@@ -102,6 +105,7 @@ namespace JuiceKing
                 }
                 _working = true;
                 _t = 0f;
+                OnBatchStart();
             }
 
             float spinTarget = _working ? 1440f * Boosts.WorkMult : 0f;
@@ -148,11 +152,18 @@ namespace JuiceKing
                     Fx.Sparkle(spoutPoint.position, col, 5);
                     Fx.Drops(spoutPoint.position, col, 5);
                     if (NearPlayer()) Sfx.Play(SfxId.Pour, 0.35f);
+                    OnCupMade();
                 }
             }
 
 
-            if (hum != null) hum.volume = Mathf.MoveTowards(hum.volume, _working && NearPlayer() ? 0.1f : 0f, dt);
+            AnimateWork(_working, _working ? Mathf.Clamp01(_t / Economy.JuiceTime(kind)) : 0f, dt);
+            if (hum != null)
+            {
+                // Deactivating the object stops the source (intro previews do that), so restart it when needed.
+                if (!hum.isPlaying && hum.clip != null) hum.Play();
+                hum.volume = Mathf.MoveTowards(hum.volume, _working && NearPlayer() ? 0.1f : 0f, dt);
+            }
 
             // Status light: steady green while blending, off when idle.
             if (statusLight != null && _ledState != _working)
@@ -177,7 +188,16 @@ namespace JuiceKing
             if (GameManager.I != null) GameManager.I.NotifyJuiceMade();
         }
 
-        bool NearPlayer()
+        /// <summary>A batch of slices went in (advanced machines start their show here).</summary>
+        protected virtual void OnBatchStart() { }
+
+        /// <summary>Every frame: <paramref name="progress"/> 0..1 through the current batch.</summary>
+        protected virtual void AnimateWork(bool working, float progress, float dt) { }
+
+        /// <summary>A cup just came out of the spout.</summary>
+        protected virtual void OnCupMade() { }
+
+        protected bool NearPlayer()
         {
             var p = GameRefs.I != null ? GameRefs.I.player : null;
             return p != null && (p.transform.position - transform.position).sqrMagnitude < 144f;

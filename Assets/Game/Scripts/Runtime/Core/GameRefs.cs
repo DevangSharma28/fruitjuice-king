@@ -12,6 +12,9 @@ namespace JuiceKing
         [Header("Item prefabs (index = FruitKind)")]
         public StackItem[] slicePrefabs;
         public StackItem[] juicePrefabs;
+        [Tooltip("Berry Cake Shop: batter bowls and cakes (index = FruitKind, only berries are set).")]
+        public StackItem[] batterPrefabs;
+        public StackItem[] cakePrefabs;
         public StackItem moneyPrefab;
 
         [Header("Art")]
@@ -20,6 +23,10 @@ namespace JuiceKing
         [Tooltip("Per-juice cup icons (index = FruitKind).")]
         public Sprite[] juiceIcons;
         public Sprite moneyIcon;
+        [Tooltip("Cake icons (index = FruitKind, berries only).")]
+        public Sprite[] cakeIcons;
+        public Sprite appleIcon;
+        public Sprite foxIcon;
         [Tooltip("Upgrade icon lookup: keys match UpgradeDef.icon.")]
         public string[] upgradeIconKeys;
         public Sprite[] upgradeIconSprites;
@@ -44,6 +51,15 @@ namespace JuiceKing
             return juiceIcons != null && i < juiceIcons.Length && juiceIcons[i] != null ? juiceIcons[i] : juiceIcon;
         }
 
+        public Sprite CakeIcon(FruitKind k)
+        {
+            int i = (int)k;
+            return cakeIcons != null && i < cakeIcons.Length && cakeIcons[i] != null ? cakeIcons[i] : FruitIcon(k);
+        }
+
+        /// <summary>Icon of what a product line sells for a kind (juice cup or cake).</summary>
+        public Sprite ProductIcon(ProductLine line, FruitKind k) => line == ProductLine.Cake ? CakeIcon(k) : JuiceIcon(k);
+
         public Sprite FruitIcon(FruitKind k)
         {
             int i = (int)k;
@@ -60,9 +76,12 @@ namespace JuiceKing
 
         public StackItem SpawnItem(ItemType type, Vector3 pos, Quaternion rot)
         {
+            int f = (int)type.Fruit();
             StackItem prefab = type == ItemType.Money ? moneyPrefab
-                : type.IsSlice() ? slicePrefabs[(int)type.Fruit()]
-                : juicePrefabs[(int)type.Fruit()];
+                : type.IsSlice() ? slicePrefabs[f]
+                : type.IsBatter() ? batterPrefabs[f]
+                : type.IsCake() ? cakePrefabs[f]
+                : juicePrefabs[f];
             var it = Pool.Spawn(prefab, pos, rot);
             it.inTransit = false;
             it.onGround = false;

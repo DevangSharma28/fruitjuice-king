@@ -7,7 +7,8 @@ namespace JuiceKing
     {
         Pop, Chop, Splat, Coin, Cash, Unlock, Drop, Click, Pour, Error,
         Tink, Trash, Lid, Whoosh, Step, Sparkle, Reward, Bubble,
-        Crack, Slice, Leafy, Squish, Horn, Depart, Fanfare, BigCash, Load, Count
+        Crack, Slice, Leafy, Squish, Horn, Depart, Fanfare, BigCash, Load,
+        Ding, Yip, Rustle, Chime, Thud, Tape, Count
     }
 
     /// <summary>
@@ -382,6 +383,53 @@ namespace JuiceKing
                 float chug = 0.7f + 0.3f * Mathf.Sin(2f * Mathf.PI * 10f * t);
                 return (Saw(40f * t) * 0.45f + Saw(80f * t + 0.2f) * 0.25f + Sin(120f * t) * 0.15f + Noise() * 0.05f) * chug * 0.45f;
             }, 0.12f);
+
+            // Oven timer: bright bell "ding" with a shimmering tail.
+            _clips[(int)SfxId.Ding] = Make("ding", 1f, (t, d) =>
+                (Sin(1568f * t) * Env(t, 0.001f, 0.6f) + 0.5f * Sin(3136f * t) * Env(t, 0.001f, 0.25f) + 0.2f * Sin(4704f * t) * Env(t, 0.001f, 0.1f)) * 0.35f);
+
+            // Fox: a short two-part yip, pitch jumping up.
+            _clips[(int)SfxId.Yip] = Make("yip", 0.34f, (t, d) =>
+            {
+                float s = 0f;
+                for (int i = 0; i < 2; i++)
+                {
+                    float lt = t - i * 0.15f;
+                    if (lt < 0f || lt > 0.13f) continue;
+                    float f = Mathf.Lerp(700f + i * 150f, 1250f + i * 200f, Mathf.Sqrt(lt / 0.13f));
+                    s += (Sin(f * lt) * 0.7f + Saw(f * lt) * 0.2f) * Env(lt, 0.006f, 0.05f);
+                }
+                return s * 0.5f + Noise() * Env(t, 0.002f, 0.02f) * 0.05f;
+            }, 0.45f);
+
+            // Bush rustle: soft crackly leaves.
+            _clips[(int)SfxId.Rustle] = Make("rustle", 0.4f, (t, d) =>
+                (Crackle(0.35f) * 0.6f + Noise() * 0.12f) * Env(t, 0.03f, 0.18f) * 0.6f, 0.35f, 0.3f);
+
+            // Golden Apple: magical rising chime.
+            float[] chime = { 1046.5f, 1318.5f, 1568f, 2093f };
+            _clips[(int)SfxId.Chime] = Make("chime", 0.8f, (t, d) =>
+            {
+                float s = 0f;
+                for (int i = 0; i < 4; i++)
+                {
+                    float lt = t - i * 0.06f;
+                    if (lt < 0f) continue;
+                    s += Sin(chime[i] * lt) * Env(lt, 0.002f, 0.35f) + 0.3f * Sin(chime[i] * 2.01f * lt) * Env(lt, 0.001f, 0.12f);
+                }
+                return s * 0.16f + Glitter(t - 0.1f, 0.4f) * 0.12f;
+            });
+
+            // Cardboard box landing / closing.
+            _clips[(int)SfxId.Thud] = Make("thud", 0.22f, (t, d) =>
+                Sin(Mathf.Lerp(150f, 70f, t / d) * t) * Env(t, 0.002f, 0.07f) * 0.8f + Noise() * Env(t, 0.001f, 0.02f) * 0.3f, 0.3f);
+
+            // Packing tape: a zippy rip.
+            _clips[(int)SfxId.Tape] = Make("tape", 0.35f, (t, d) =>
+            {
+                float buzz = Saw((180f + t * 400f) * t) * 0.3f + Noise() * 0.5f;
+                return buzz * Env(t, 0.01f, 0.25f) * Mathf.Clamp01((d - t) * 12f) * 0.45f;
+            }, 0.5f, 0.2f);
 
             _ambient = MakeAmbient(8f);
         }

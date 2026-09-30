@@ -58,7 +58,7 @@ namespace JuiceKing
             if (bubble != null)
             {
                 bubble.transform.localScale = _bubbleScale;
-                bubble.SetOrder(GameRefs.I.fruitIcons[(int)kind], wantCount);
+                bubble.SetOrder(mgr.line == ProductLine.Cake ? GameRefs.I.CakeIcon(kind) : GameRefs.I.fruitIcons[(int)kind], wantCount);
                 bubble.SetPatience(0f);
                 bubble.gameObject.SetActive(false);
             }
@@ -99,6 +99,7 @@ namespace JuiceKing
 
         void Update()
         {
+            if (bubble != null) bubble.queueSlot = slot;
             float dt = Time.deltaTime;
             switch (state)
             {

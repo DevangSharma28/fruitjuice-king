@@ -23,6 +23,7 @@ namespace JuiceKing.EditorTools
             FxTextures();
             WorldTextures();
             TropicalArt();
+            BerryArt();
         }
 
         // ---------------------------------------------------------------- shape helpers

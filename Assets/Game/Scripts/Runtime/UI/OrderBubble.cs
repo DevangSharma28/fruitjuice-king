@@ -16,9 +16,18 @@ namespace JuiceKing
         public SpriteRenderer patienceFillRenderer;
         public GameObject patienceBar;
 
-        Vector3 _iconScale = Vector3.one, _happyScale = Vector3.one, _sadScale = Vector3.one, _fillScale = Vector3.one;
+        [Tooltip("Place in the queue (0 = at the counter). Bubbles further back are smaller and drawn underneath.")]
+        public int queueSlot;
+
+        Vector3 _iconScale = Vector3.one, _happyScale = Vector3.one, _sadScale = Vector3.one, _fillScale = Vector3.one, _rootScale = Vector3.one;
+        Renderer[] _renderers;
+        int[] _baseOrder;
+        int _appliedSlot = int.MinValue;
+        bool _hiding;
         int _serial;
         float _patience;
+        Vector3 _basePos;
+        float _side;
 
         static readonly Color Calm = new Color(0.45f, 0.9f, 0.4f);
         static readonly Color Worried = new Color(1f, 0.8f, 0.2f);
@@ -26,6 +35,11 @@ namespace JuiceKing
 
         void Awake()
         {
+            _rootScale = transform.localScale;
+            _basePos = transform.localPosition;
+            _renderers = GetComponentsInChildren<Renderer>(true);
+            _baseOrder = new int[_renderers.Length];
+            for (int i = 0; i < _renderers.Length; i++) _baseOrder[i] = _renderers[i].sortingOrder;
             if (icon != null) _iconScale = icon.transform.localScale;
             if (happy != null) _happyScale = happy.transform.localScale;
             if (sad != null) _sadScale = sad.transform.localScale;
@@ -35,6 +49,7 @@ namespace JuiceKing
         public void SetOrder(Sprite fruit, int count)
         {
             _serial++;
+            _hiding = false;
             if (icon != null)
             {
                 icon.sprite = fruit;
@@ -72,6 +87,34 @@ namespace JuiceKing
 
         void LateUpdate()
         {
+            // The queue stands in a line toward the camera, so every bubble overlaps the one in front of it: keep the
+            // customer being served big and on top, and shrink the ones waiting behind.
+            int slot = Mathf.Max(0, queueSlot);
+            if (slot != _appliedSlot)
+            {
+                _appliedSlot = slot;
+                int boost = (12 - Mathf.Min(slot, 12)) * 5;
+                for (int i = 0; i < _renderers.Length; i++)
+                    if (_renderers[i] != null) _renderers[i].sortingOrder = _baseOrder[i] + boost;
+            }
+            if (!_hiding)
+            {
+                float k = slot == 0 ? 1.08f : slot == 1 ? 0.86f : slot == 2 ? 0.76f : 0.68f;
+                transform.localScale = Vector3.Lerp(transform.localScale, _rootScale * k, 1f - Mathf.Exp(-10f * Time.deltaTime));
+                // Waiting bubbles zig-zag to either side of their customer, so the line of bubbles does not stack
+                // into one column over everybody's heads.
+                float side = slot == 0 ? 0f : slot % 2 == 1 ? 0.42f : -0.42f;
+                _side = Mathf.Lerp(_side, side, 1f - Mathf.Exp(-8f * Time.deltaTime));
+            }
+            var parent = transform.parent;
+            if (parent != null)
+            {
+                var cam = GameRefs.I != null ? GameRefs.I.mainCamera : null;
+                Vector3 right = cam != null ? cam.transform.right : Vector3.right;
+                right.y = 0f;
+                transform.position = parent.TransformPoint(_basePos) + right.normalized * _side;
+            }
+
             // Nervous jitter in the last stretch.
             if (_patience > 0.8f && icon != null && icon.gameObject.activeSelf)
             {
@@ -82,6 +125,7 @@ namespace JuiceKing
 
         void Hide(bool happyFace)
         {
+            _hiding = true;
             if (icon != null)
             {
                 icon.gameObject.SetActive(false);

@@ -13,10 +13,15 @@ namespace JuiceKing
         public TruckBoard board;
         [Tooltip("One reusable truck per TruckKind (index = TruckKind).")]
         public DeliveryTruck[] trucks;
+        [Tooltip("Optional: goods go into this box, which is loaded aboard when full (Berry Blast).")]
+        public DeliveryBox box;
+        [Tooltip("Desk that runs this bay (empty = the scene's first desk).")]
+        public DeliveryManager manager;
 
         void OnEnable()
         {
-            if (DeliveryManager.I != null) DeliveryManager.I.OnBayOpened(this);
+            var m = manager != null ? manager : DeliveryManager.I;
+            if (m != null) m.OnBayOpened(this);
         }
     }
 }

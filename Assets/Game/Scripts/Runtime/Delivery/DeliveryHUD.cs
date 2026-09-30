@@ -41,8 +41,7 @@ namespace JuiceKing
 
         void Update()
         {
-            var dm = DeliveryManager.I;
-            bool show = dm != null && dm.Unlocked;
+            bool show = DeliveryManager.AnyUnlocked();
             if (show != _shown)
             {
                 _shown = show;
@@ -51,7 +50,7 @@ namespace JuiceKing
             }
             if (!show) return;
 
-            bool loading = dm.Loading;
+            bool loading = DeliveryManager.AnyLoading();
             if (loading != _loading)
             {
                 _loading = loading;

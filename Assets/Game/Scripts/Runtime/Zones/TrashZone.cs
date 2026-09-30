@@ -27,7 +27,8 @@ namespace JuiceKing
                 var gm = GameManager.I;
                 var it = c.TakeLast(t => t.IsSlice() && !gm.HasJuicer(t.Fruit()))
                          ?? c.TakeLast(t => t.IsSlice())
-                         ?? c.TakeLast(t => t.IsJuice());
+                         ?? c.TakeLast(t => t.IsJuice())
+                         ?? c.TakeLast(t => t.IsCake());
                 if (it == null) break;
                 bin.Swallow(it, c);
             }

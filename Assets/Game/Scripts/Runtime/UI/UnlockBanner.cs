@@ -9,6 +9,9 @@ namespace JuiceKing
     {
         public static UnlockBanner I { get; private set; }
 
+        /// <summary>Time (unscaled) until which the banner occupies the top of the screen; toasts wait for it.</summary>
+        public static float BusyUntil { get; private set; }
+
         public RectTransform banner;
         public TextMeshProUGUI titleText;
         public TextMeshProUGUI subtitleText;
@@ -31,6 +34,8 @@ namespace JuiceKing
         public void Show(string title, Sprite sprite, string subtitle = null)
         {
             int serial = ++_serial;
+            BusyUntil = Time.unscaledTime + hold + (string.IsNullOrEmpty(subtitle) ? 0f : 0.8f) + 0.35f;
+            if (HUD.I != null) HUD.I.HideToast();
             titleText.text = title;
             if (subtitleText != null)
             {

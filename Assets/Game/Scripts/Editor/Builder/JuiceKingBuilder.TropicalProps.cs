@@ -13,7 +13,7 @@ namespace JuiceKing.EditorTools
         static Material _tSand, _tGrassPatch, _tOcean, _tFoam, _tRoad, _tTrunk, _tPalmLeaf, _tBananaLeaf, _tMangoLeaf, _tPapayaLeaf,
             _tMangoSkin, _tMangoBlush, _tBanana, _tPapayaSkin, _tThatch, _tBamboo, _tSoil, _tSoilRim, _tLagoon, _tPathBlob, _tFlame,
             _tHibiscus, _tDeck, _tRock, _tPadRound, _tGlowPad, _tGlowBase, _tTruckGlass, _tTyre, _tHeadOn, _tHeadOff, _tBerry;
-        static Material _tShallows;
+        static Material _tShallows, _tWaterfall;
         static Mesh _lowSphere, _ballSphere;
         static Mesh[] _shLeafBall = new Mesh[3];
         static Mesh _shFrond, _shBroadLeaf, _shPapayaLeaf, _shBanana, _shPalmTrunk, _shShortTrunk, _shThinTrunk, _shStem, _shThatch;
@@ -22,7 +22,7 @@ namespace JuiceKing.EditorTools
 
         static Material LitTransparent(string name, Color c, Texture tex, Vector2 tiling, int queue)
         {
-            var m = MatLib.Lit(name, c, 0.05f, tex, tiling);
+            var m = MatLib.LitURP(name, c, 0.05f, tex, tiling);
             m.SetFloat("_Surface", 1f);
             m.SetFloat("_Blend", 0f);
             m.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
@@ -43,8 +43,13 @@ namespace JuiceKing.EditorTools
         {
             _tSand = MatLib.Lit("T_Sand", Color.white, 0.05f, MatLib.Tex("ground_sand.png"), new Vector2(1f, 1f));
             _tGrassPatch = LitTransparent("T_GrassPatch", new Color(0.8f, 0.86f, 0.78f), MatLib.Tex("grass_patch.png"), Vector2.one, 2600);
-            _tOcean = MatLib.Lit("T_Ocean", Color.white, 0.85f, MatLib.Tex("ground_ocean.png"), new Vector2(36f, 36f));
-            _tLagoon = MatLib.Lit("T_Lagoon", new Color(0.85f, 1f, 1f), 0.9f, MatLib.Tex("ground_ocean.png"), new Vector2(2f, 2f));
+            _tOcean = MatLib.Water("T_Ocean", new Color(0.34f, 0.84f, 0.9f), new Color(0.07f, 0.42f, 0.7f), 0.09f, 0f, 1.1f);
+            _tLagoon = MatLib.Water("T_Lagoon", new Color(0.52f, 0.95f, 0.92f), new Color(0.14f, 0.6f, 0.7f), 0.3f, 0.004f, 0.6f);
+            _tWaterfall = MatLib.Lit("T_Waterfall", Color.white, 0.6f, MatLib.Tex("waterfall.png"), Vector2.one);
+            _tWaterfall.SetColor("_EmissionColor", new Color(0.1f, 0.16f, 0.18f));
+            _tWaterfall.SetFloat("_DetailStrength", 0f);
+            _tWaterfall.SetFloat("_AOStrength", 0.1f);
+            _tWaterfall.SetFloat("_RimStrength", 0.3f);
             _tFoam = MatLib.Sprite("T_Foam", MatLib.Tex("foam_strip.png"), new Color(1f, 1f, 1f, 0.9f));
             _tFoam.renderQueue = 2990;
             _tRoad = MatLib.Lit("T_Road", Color.white, 0.12f, MatLib.Tex("road_lane.png"), Vector2.one);
@@ -109,12 +114,24 @@ namespace JuiceKing.EditorTools
             var v = new List<Vector3>();
             var tris = new List<int>();
             var uv = new List<Vector2>();
+            var col = new List<Color>();
+            // Vertex colour: darker, cooler base -> sun-bleached tip (edges a touch darker); alpha = wind weight.
+            Color Shade(float t, bool edge)
+            {
+                var c = Color.Lerp(new Color(0.55f, 0.68f, 0.55f), new Color(1f, 1f, 0.86f), Mathf.SmoothStep(0f, 1f, t));
+                if (edge) c *= 0.88f;
+                c.a = t;
+                return c;
+            }
             for (int side = 0; side < 2; side++)
             {
                 int start = v.Count;
                 for (int i = 0; i <= segs; i++)
                 {
                     float t = i / (float)segs;
+                    col.Add(Shade(t, false));
+                    col.Add(Shade(t, true));
+                    col.Add(Shade(t, true));
                     float w = width * Mathf.Sin(Mathf.PI * Mathf.Pow(t, 0.75f)) * (i % 2 == 1 ? 1f - serration : 1f);
                     if (i == segs) w = 0f;
                     var c = new Vector3(0f, curl * t - droop * t * t, length * t);
@@ -145,6 +162,7 @@ namespace JuiceKing.EditorTools
             var m = new Mesh { name = name };
             m.SetVertices(v);
             m.SetUVs(0, uv);
+            m.SetColors(col);
             m.SetTriangles(tris, 0);
             m.RecalculateNormals();
             m.RecalculateBounds();
@@ -157,6 +175,7 @@ namespace JuiceKing.EditorTools
             var v = new List<Vector3>();
             var n = new List<Vector3>();
             var uv = new List<Vector2>();
+            var cols = new List<Color>();
             var tris = new List<int>();
             for (int r = 0; r <= rings; r++)
             {
@@ -167,6 +186,7 @@ namespace JuiceKing.EditorTools
                     var d = new Vector3(Mathf.Sin(phi) * Mathf.Cos(th), Mathf.Cos(phi), Mathf.Sin(phi) * Mathf.Sin(th));
                     v.Add(d * 0.5f);
                     n.Add(d);
+                    cols.Add(new Color(1f, 1f, 1f, d.y * 0.5f + 0.5f));
                     uv.Add(new Vector2(k / (float)seg, 1f - r / (float)rings));
                 }
             }
@@ -181,6 +201,7 @@ namespace JuiceKing.EditorTools
             m.SetVertices(v);
             m.SetNormals(n);
             m.SetUVs(0, uv);
+            m.SetColors(cols);
             m.SetTriangles(tris, 0);
             m.RecalculateBounds();
             return SaveMesh(m, name);
@@ -210,6 +231,16 @@ namespace JuiceKing.EditorTools
             }
             for (int i = 0; i < v.Length; i++) n[i] = sum[Key(v[i])].normalized;
             m.normals = n;
+            var cols = new Color[v.Length];
+            for (int i = 0; i < v.Length; i++)
+            {
+                float hgt = Mathf.Clamp01(v[i].y + 0.5f);
+                float mott = 0.9f + Mathf.PerlinNoise(v[i].x * 7f + seed, v[i].z * 7f - seed) * 0.2f;
+                var c = Color.Lerp(new Color(0.55f, 0.66f, 0.58f), new Color(1f, 1f, 0.9f), hgt) * mott;
+                c.a = hgt * 0.7f;
+                cols[i] = c;
+            }
+            m.colors = cols;
             m.name = name;
             m.RecalculateBounds();
             return SaveMesh(m, name);
@@ -221,6 +252,7 @@ namespace JuiceKing.EditorTools
             var v = new List<Vector3>();
             var n = new List<Vector3>();
             var uv = new List<Vector2>();
+            var cols = new List<Color>();
             var tris = new List<int>();
             int rows = rings * 2;
             for (int i = 0; i <= rows; i++)
@@ -228,6 +260,8 @@ namespace JuiceKing.EditorTools
                 float t = i / (float)rows;
                 var c = new Vector3(bend * t * t, height * t, 0f);
                 float r = Mathf.Lerp(r0, r1, t) * (1f + (i % 2 == 0 ? ridge : 0f));
+                var band = (i % 2 == 0 ? 0.84f : 1f) * Mathf.Lerp(0.72f, 1f, Mathf.Sqrt(t));
+                var bandCol = new Color(band, band, band, 0f);
                 for (int k = 0; k <= seg; k++)
                 {
                     float a = k / (float)seg * Mathf.PI * 2f;
@@ -235,6 +269,7 @@ namespace JuiceKing.EditorTools
                     v.Add(c + dir * r);
                     n.Add(dir);
                     uv.Add(new Vector2(k / (float)seg, t * 4f));
+                    cols.Add(bandCol);
                 }
             }
             for (int i = 0; i < rows; i++)
@@ -249,12 +284,14 @@ namespace JuiceKing.EditorTools
             v.Add(top);
             n.Add(Vector3.up);
             uv.Add(new Vector2(0.5f, 0.5f));
+            cols.Add(new Color(0.9f, 0.9f, 0.9f, 0f));
             int ring = rows * (seg + 1);
             for (int k = 0; k < seg; k++) tris.AddRange(new[] { ci, ring + k + 1, ring + k });
             var m = new Mesh { name = name };
             m.SetVertices(v);
             m.SetNormals(n);
             m.SetUVs(0, uv);
+            m.SetColors(cols);
             m.SetTriangles(tris, 0);
             m.RecalculateBounds();
             return SaveMesh(m, name);
@@ -593,7 +630,7 @@ namespace JuiceKing.EditorTools
         {
             var t = B.Node("BeachUmbrella", parent, pos, new Vector3(0f, 0f, (float)_rnd.NextDouble() * 10f - 5f)).transform;
             B.Cyl("Pole", t, _mWhite, new Vector3(0f, 1.2f, 0f), 0.07f, 2.4f);
-            B.MeshObj("Canopy", t, MakeUmbrella(), canopy, new Vector3(0f, 2.15f, 0f), new Vector3(2.2f, 0.7f, 2.2f));
+            StripedUmbrella(t, canopy, new Vector3(0f, 2.15f, 0f), new Vector3(2.2f, 0.7f, 2.2f));
         }
 
         static void Lounger(Transform parent, Vector3 pos, float yaw, Material towel)
@@ -720,7 +757,8 @@ namespace JuiceKing.EditorTools
             {
                 var wheel = B.Node("Wheel", t, new Vector3(sx * (w * 0.5f - 0.1f), 0.42f, wz)).transform;
                 B.MeshObj("Tyre", wheel, B.Cylinder, _tTyre, Vector3.zero, new Vector3(0.84f, 0.16f, 0.84f), new Vector3(0f, 0f, 90f));
-                B.MeshObj("Hub", wheel, B.Cylinder, trim, new Vector3(sx * 0.1f, 0f, 0f), new Vector3(0.4f, 0.04f, 0.4f), new Vector3(0f, 0f, 90f), false);
+                // Hub stands proud of the tyre face (+-0.16) instead of hiding inside it.
+                B.MeshObj("Hub", wheel, B.Cylinder, trim, new Vector3(sx * 0.155f, 0f, 0f), new Vector3(0.4f, 0.03f, 0.4f), new Vector3(0f, 0f, 90f), false);
                 wheels.Add(wheel);
             }
 

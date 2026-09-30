@@ -39,9 +39,14 @@ namespace JuiceKing
         [Header("Water")]
         public Renderer[] water;
         public Vector2 waterScroll = new Vector2(0.03f, 0.02f);
+        [Tooltip("Surfaces with their own scroll speed (waterfalls, streams).")]
+        public Renderer[] flows;
+        public Vector2 flowScroll = new Vector2(0f, -0.6f);
 
         readonly List<Material> _waterMats = new List<Material>();
         readonly List<int> _waterProps = new List<int>();
+        readonly List<Material> _flowMats = new List<Material>();
+        readonly List<int> _flowProps = new List<int>();
 
         void Awake()
         {
@@ -61,6 +66,14 @@ namespace JuiceKing
                     int prop = m.HasProperty("_BaseMap") ? Shader.PropertyToID("_BaseMap") : Shader.PropertyToID("_MainTex");
                     _waterMats.Add(m);
                     _waterProps.Add(prop);
+                }
+            if (flows != null)
+                foreach (var r in flows)
+                {
+                    if (r == null) continue;
+                    var m = r.material;
+                    _flowMats.Add(m);
+                    _flowProps.Add(m.HasProperty("_BaseMap") ? Shader.PropertyToID("_BaseMap") : Shader.PropertyToID("_MainTex"));
                 }
         }
 
@@ -103,6 +116,8 @@ namespace JuiceKing
 
             for (int i = 0; i < _waterMats.Count; i++)
                 _waterMats[i].SetTextureOffset(_waterProps[i], waterScroll * time);
+            for (int i = 0; i < _flowMats.Count; i++)
+                _flowMats[i].SetTextureOffset(_flowProps[i], flowScroll * time);
         }
     }
 }

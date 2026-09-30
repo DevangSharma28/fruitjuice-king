@@ -15,6 +15,10 @@ namespace JuiceKing
         public int customersServed;
         public int deliveries;
         public long deliveryEarned;
+        public int cakesBaked;
+        public int cakesSold;
+        public int foxRaids;
+        public int applesEarned;
     }
 
     /// <summary>The truck currently at (or due at) the delivery bay.</summary>
@@ -30,6 +34,8 @@ namespace JuiceKing
         public string client;
         public float cooldown = 20f;
         public float waited;
+        /// <summary>What the truck wants (<see cref="ProductLine"/>): 0 = juice (every save before the Berry Blast), 1 = cake.</summary>
+        public int line;
     }
 
     [Serializable]
@@ -48,7 +54,16 @@ namespace JuiceKing
         public List<string> upIds = new List<string>();
         public List<int> upLevels = new List<int>();
         public DeliverySave delivery = new DeliverySave();
+        /// <summary>Second delivery desk (Berry Blast).</summary>
+        public DeliverySave delivery2 = new DeliverySave();
         public bool introSeen;
+        /// <summary>Cakes sold in this world (drives cake order sizes).</summary>
+        public int cakesSold;
+        /// <summary>Fox raids (Berry Blast): the first one plays a cutscene; damaged farms regrow on these timers.</summary>
+        public bool foxIntroSeen;
+        public float foxNext = -1f;
+        public List<int> foxKinds = new List<int>();
+        public List<float> foxTimers = new List<float>();
 
         // ---- permanent / meta
         /// <summary>0 in saves written before Expansion 1 (field absent), <see cref="GameManager.SaveVersion"/> after migration.</summary>
@@ -58,7 +73,11 @@ namespace JuiceKing
         public bool world0Complete;
         /// <summary>JSON snapshot of the finished original farm.</summary>
         public string world0Archive;
+        public bool world1Complete;
+        public string world1Archive;
         public LifetimeStats stats = new LifetimeStats();
+        /// <summary>Premium currency, kept across every world. Saves written before it existed start with the welcome gift.</summary>
+        public int goldenApples = Economy.StartingApples;
     }
 
     public enum UpgradeKind { Saw, Bag, Speed, Price, Counter }
@@ -68,7 +87,7 @@ namespace JuiceKing
     public class GameManager : MonoBehaviour
     {
         const string SaveKey = "juiceking_save_v1";
-        public const int SaveVersion = 2;
+        public const int SaveVersion = 3;
 
         public static GameManager I { get; private set; }
 
@@ -84,11 +103,16 @@ namespace JuiceKing
         public event Action UpgradesChanged;
         public event Action<string> Unlocked;
         public event Action JuiceSold;
+        /// <summary>(newValue, delta)</summary>
+        public event Action<int, int> ApplesChanged;
 
         readonly HashSet<FruitKind> _activeJuicers = new HashSet<FruitKind>();
         readonly List<FruitKind> _activeJuicerList = new List<FruitKind>();
         readonly HashSet<FruitKind> _activeFields = new HashSet<FruitKind>();
         readonly List<FruitKind> _orderable = new List<FruitKind>();
+        readonly HashSet<FruitKind> _cakeMixers = new HashSet<FruitKind>();
+        readonly HashSet<FruitKind> _ovens = new HashSet<FruitKind>();
+        readonly List<FruitKind> _orderableCakes = new List<FruitKind>();
         bool _dirty;
         float _saveTimer;
 
@@ -97,6 +121,13 @@ namespace JuiceKing
 
         /// <summary>Fruit kinds customers may order: the juicer and its field are both open.</summary>
         public IReadOnlyList<FruitKind> OrderableKinds => _orderable;
+
+        /// <summary>Cakes customers may order: the berry's field, cake mixer and oven are all open.</summary>
+        public IReadOnlyList<FruitKind> OrderableCakes => _orderableCakes;
+
+        public IReadOnlyList<FruitKind> Orderable(ProductLine line) => line == ProductLine.Cake ? _orderableCakes : _orderable;
+
+        public int Apples => data.goldenApples;
 
         /// <summary>Seconds the player was away (0 on first launch), measured when the save loaded.</summary>
         public double AwaySeconds { get; private set; }
@@ -173,11 +204,47 @@ namespace JuiceKing
             JuiceSold?.Invoke();
         }
 
+        /// <summary>A cake customer paid for <paramref name="count"/> cakes.</summary>
+        public void NotifyCakeSold(int count)
+        {
+            data.cakesSold += count;
+            data.stats.cakesSold += count;
+            data.stats.customersServed++;
+            _dirty = true;
+        }
+
+        public void NotifyCakeBaked() => data.stats.cakesBaked++;
+
         public void NotifyJuiceMade() => data.stats.juiceMade++;
+
+        // ---------------- Golden Apples (premium) ----------------
+
+        public void AddApples(int n)
+        {
+            if (n == 0) return;
+            data.goldenApples = Mathf.Max(0, data.goldenApples + n);
+            if (n > 0) data.stats.applesEarned += n;
+            _dirty = true;
+            Save();
+            ApplesChanged?.Invoke(data.goldenApples, n);
+        }
+
+        public bool TrySpendApples(int n)
+        {
+            if (n <= 0) return true;
+            if (data.goldenApples < n) return false;
+            AddApples(-n);
+            return true;
+        }
         public void NotifyFruitHarvested() => data.stats.fruitHarvested++;
 
         /// <summary>Sale price of one juice cup, including the recipe / juice-price upgrade.</summary>
         public int JuicePrice(FruitKind k) => Mathf.RoundToInt(Balance.JuicePrice[(int)k] * Economy.PriceMult);
+
+        /// <summary>Sale price of one cake, including the Cake Recipe upgrade.</summary>
+        public int CakePrice(FruitKind k) => Mathf.RoundToInt(Balance.CakePrice[(int)k] * Economy.CakePriceMult);
+
+        public int ProductPrice(ProductLine line, FruitKind k) => line == ProductLine.Cake ? CakePrice(k) : JuicePrice(k);
 
         // ---------------- Data-driven upgrades (Expansion 1+) ----------------
 
@@ -273,11 +340,34 @@ namespace JuiceKing
 
         public bool HasJuicer(FruitKind kind) => _activeJuicers.Contains(kind);
 
+        public void RegisterCakeMixer(FruitKind kind, bool on)
+        {
+            if (on) _cakeMixers.Add(kind);
+            else _cakeMixers.Remove(kind);
+            RefreshOrderable();
+        }
+
+        public void RegisterOven(FruitKind kind, bool on)
+        {
+            if (on) _ovens.Add(kind);
+            else _ovens.Remove(kind);
+            RefreshOrderable();
+        }
+
+        public bool HasCakeMixer(FruitKind kind) => _cakeMixers.Contains(kind);
+        public bool HasField(FruitKind kind) => _activeFields.Contains(kind);
+
         void RefreshOrderable()
         {
             _orderable.Clear();
             foreach (var k in _activeJuicerList)
                 if (_activeFields.Contains(k)) _orderable.Add(k);
+            _orderableCakes.Clear();
+            for (int k = 0; k < ItemTypes.FruitCount; k++)
+            {
+                var f = (FruitKind)k;
+                if (_ovens.Contains(f) && _cakeMixers.Contains(f) && _activeFields.Contains(f)) _orderableCakes.Add(f);
+            }
         }
 
         // ---------------- Upgrades ----------------
@@ -384,19 +474,22 @@ namespace JuiceKing
 
             if (data.stats == null) data.stats = new LifetimeStats();
             if (data.delivery == null) data.delivery = new DeliverySave();
+            if (data.delivery2 == null) data.delivery2 = new DeliverySave();
             if (data.upIds == null) data.upIds = new List<string>();
             if (data.upLevels == null) data.upLevels = new List<int>();
-            // v1 saves had no lifetime stats: seed "customers served" from cups sold so the completion screen is sensible.
-            if (data.saveVersion < SaveVersion)
+            if (data.foxKinds == null) data.foxKinds = new List<int>();
+            if (data.foxTimers == null) data.foxTimers = new List<float>();
+            // v1 saves had no lifetime stats: estimate them from cups sold (about $11 a cup, 2 slices per cup, ~3.5 slices
+            // per fruit) so the completion screen does not show zeros.
+            if (data.saveVersion < 2)
             {
-                // Lifetime totals that older builds never tracked: estimate from cups sold (about $11 a cup, 2 slices per
-                // cup, ~3.5 slices per fruit) so the completion screen does not show zeros.
-                data.saveVersion = SaveVersion;
                 if (data.stats.customersServed == 0) data.stats.customersServed = data.totalSold / 2;
                 if (data.stats.juiceMade == 0) data.stats.juiceMade = data.totalSold;
                 if (data.stats.earned == 0) data.stats.earned = data.totalSold * 11L + data.money;
                 if (data.stats.fruitHarvested == 0) data.stats.fruitHarvested = Mathf.RoundToInt(data.totalSold * 2f / 3.5f);
             }
+            // v3 (Berry Blast) only added fields with safe defaults: Golden Apples start at the welcome gift.
+            data.saveVersion = SaveVersion;
 
             AwaySeconds = 0;
             if (data.lastSeenTicks > 0)
@@ -449,6 +542,16 @@ namespace JuiceKing
                 data.world0Archive = JsonUtility.ToJson(snap);
                 data.world0Complete = true;
             }
+            else if (data.expansion == 1)
+            {
+                var snap = new SaveData
+                {
+                    money = data.money, unlocked = new List<string>(data.unlocked), upIds = new List<string>(data.upIds),
+                    upLevels = new List<int>(data.upLevels), tutorialStep = data.tutorialStep, totalSold = data.totalSold
+                };
+                data.world1Archive = JsonUtility.ToJson(snap);
+                data.world1Complete = true;
+            }
             data.expansion = expansion;
             data.money = startingMoney;
             data.unlocked.Clear();
@@ -460,7 +563,13 @@ namespace JuiceKing
             data.tutorialStep = 0;
             data.totalSold = 0;
             data.delivery = new DeliverySave();
+            data.delivery2 = new DeliverySave();
             data.introSeen = false;
+            data.cakesSold = 0;
+            data.foxIntroSeen = false;
+            data.foxNext = -1f;
+            data.foxKinds.Clear();
+            data.foxTimers.Clear();
             Save();
         }
     }
