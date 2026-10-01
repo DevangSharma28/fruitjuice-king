@@ -78,6 +78,10 @@ namespace JuiceKing
         public LifetimeStats stats = new LifetimeStats();
         /// <summary>Premium currency, kept across every world. Saves written before it existed start with the welcome gift.</summary>
         public int goldenApples = Economy.StartingApples;
+        /// <summary>Ad Tickets (bought in the shop): each one claims a rewarded-ad reward without watching the ad.</summary>
+        public int adTickets;
+        /// <summary>Remove Ads purchased: no forced ads. Rewarded ads stay available as optional rewards.</summary>
+        public bool noAds;
     }
 
     public enum UpgradeKind { Saw, Bag, Speed, Price, Counter }
@@ -87,6 +91,8 @@ namespace JuiceKing
     public class GameManager : MonoBehaviour
     {
         const string SaveKey = "juiceking_save_v1";
+        /// <summary>Debug world switcher: each world's parked progress (separate key, never part of the real save).</summary>
+        public const string DebugWorldsKey = "juiceking_debug_worlds";
         public const int SaveVersion = 3;
 
         public static GameManager I { get; private set; }
@@ -105,6 +111,9 @@ namespace JuiceKing
         public event Action JuiceSold;
         /// <summary>(newValue, delta)</summary>
         public event Action<int, int> ApplesChanged;
+        /// <summary>(newValue, delta)</summary>
+        public event Action<int, int> TicketsChanged;
+        public event Action NoAdsChanged;
 
         readonly HashSet<FruitKind> _activeJuicers = new HashSet<FruitKind>();
         readonly List<FruitKind> _activeJuicerList = new List<FruitKind>();
@@ -128,6 +137,8 @@ namespace JuiceKing
         public IReadOnlyList<FruitKind> Orderable(ProductLine line) => line == ProductLine.Cake ? _orderableCakes : _orderable;
 
         public int Apples => data.goldenApples;
+        public int Tickets => data.adTickets;
+        public bool NoAds => data.noAds;
 
         /// <summary>Seconds the player was away (0 on first launch), measured when the save loaded.</summary>
         public double AwaySeconds { get; private set; }
@@ -235,6 +246,33 @@ namespace JuiceKing
             if (data.goldenApples < n) return false;
             AddApples(-n);
             return true;
+        }
+
+        // ---------------- Ad Tickets / Remove Ads (shop) ----------------
+
+        public void AddTickets(int n)
+        {
+            if (n == 0) return;
+            data.adTickets = Mathf.Max(0, data.adTickets + n);
+            _dirty = true;
+            Save();
+            TicketsChanged?.Invoke(data.adTickets, n);
+        }
+
+        public bool TrySpendTicket()
+        {
+            if (data.adTickets <= 0) return false;
+            AddTickets(-1);
+            return true;
+        }
+
+        public void SetNoAds(bool on)
+        {
+            if (data.noAds == on) return;
+            data.noAds = on;
+            _dirty = true;
+            Save();
+            NoAdsChanged?.Invoke();
         }
         public void NotifyFruitHarvested() => data.stats.fruitHarvested++;
 
@@ -503,6 +541,7 @@ namespace JuiceKing
         public void ResetProgress()
         {
             PlayerPrefs.DeleteKey(SaveKey);
+            PlayerPrefs.DeleteKey(DebugWorldsKey);
             PlayerPrefs.Save();
             data = new SaveData { money = startMoney };
             _dirty = false;
@@ -552,6 +591,13 @@ namespace JuiceKing
                 data.world1Archive = JsonUtility.ToJson(snap);
                 data.world1Complete = true;
             }
+            ResetWorldProgress(expansion, startingMoney);
+            Save();
+        }
+
+        /// <summary>Per-world progress back to a fresh start in <paramref name="expansion"/> (meta data is kept).</summary>
+        void ResetWorldProgress(int expansion, long startingMoney)
+        {
             data.expansion = expansion;
             data.money = startingMoney;
             data.unlocked.Clear();
@@ -570,7 +616,59 @@ namespace JuiceKing
             data.foxNext = -1f;
             data.foxKinds.Clear();
             data.foxTimers.Clear();
+        }
+
+        // ---------------- debug world switcher (Settings > DEBUG, Editor and development builds) ----------------
+
+        [Serializable]
+        class DebugWorlds
+        {
+            public List<string> worlds = new List<string>();
+        }
+
+        /// <summary>
+        /// Jumps to another world for testing. The current world's progress is parked under <see cref="DebugWorldsKey"/>
+        /// and restored when you come back; Golden Apples, Ad Tickets, Remove Ads, lifetime stats and world archives are
+        /// shared. A world never visited starts fresh (as on entering it), without marking any world complete.
+        /// </summary>
+        public void DebugSwitchWorld(int world)
+        {
+            world = Mathf.Clamp(world, 0, ExpansionManager.WorldCount - 1);
+            if (world == data.expansion || Redirecting) return;
+
+            DebugWorlds slots = null;
+            try { slots = JsonUtility.FromJson<DebugWorlds>(PlayerPrefs.GetString(DebugWorldsKey, "")); }
+            catch { }
+            if (slots == null) slots = new DebugWorlds();
+            while (slots.worlds.Count < ExpansionManager.WorldCount) slots.worlds.Add("");
+            slots.worlds[Mathf.Clamp(data.expansion, 0, ExpansionManager.WorldCount - 1)] = JsonUtility.ToJson(data);
+
+            SaveData parked = null;
+            if (!string.IsNullOrEmpty(slots.worlds[world]))
+            {
+                try { parked = JsonUtility.FromJson<SaveData>(slots.worlds[world]); }
+                catch { }
+            }
+            if (parked != null)
+            {
+                // Shared (meta) data always comes from the live save.
+                parked.goldenApples = data.goldenApples;
+                parked.adTickets = data.adTickets;
+                parked.noAds = data.noAds;
+                parked.stats = data.stats;
+                parked.world0Complete = data.world0Complete;
+                parked.world0Archive = data.world0Archive;
+                parked.world1Complete = data.world1Complete;
+                parked.world1Archive = data.world1Archive;
+                parked.saveVersion = data.saveVersion;
+                parked.expansion = world;
+                data = parked;
+            }
+            else ResetWorldProgress(world, Economy.StartMoney(world));
+
+            PlayerPrefs.SetString(DebugWorldsKey, JsonUtility.ToJson(slots));
             Save();
+            LoadingScreen.LoadSavedWorld();
         }
     }
 }

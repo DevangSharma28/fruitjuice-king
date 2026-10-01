@@ -68,20 +68,21 @@ Shader "JuiceKing/Stylized"
         CBUFFER_END
 
         // Player see-through: tall decor standing between the camera and the player dithers away around them.
-        // _JKOccluder: xyz = the player's chest in world space, w = 1 while active (set by CameraFollow).
+        // _JKOccluder: xyz = the player's chest in world space, w = strength 0..1 (CameraFollow fades it out while the
+        // camera pans away from the player, so decor does not flicker as the sight line sweeps across it).
         float4 _JKOccluder;
 
         void SeeThroughClip(float3 positionWS, float2 pixel)
         {
         #if defined(_SEE_THROUGH)
-            if (_JKOccluder.w < 0.5) return;
+            if (_JKOccluder.w < 0.01) return;
             float3 Q = _JKOccluder.xyz;
             float3 D = normalize(Q - _WorldSpaceCameraPos);
             float3 R = positionWS - Q;
             float2 toCam = -normalize(D.xz + float2(1e-5, 0));
             float ahead = dot(R.xz, toCam);            // metres from the player towards the camera
             float perp = length(R - dot(R, D) * D);   // distance from the camera-to-player sight line
-            float k = saturate((ahead - 0.6) * 2.0) * saturate((1.5 - perp) * 2.0) * saturate((positionWS.y - 0.4) * 4.0);
+            float k = saturate((ahead - 0.6) * 2.0) * saturate((1.5 - perp) * 2.0) * saturate((positionWS.y - 0.4) * 4.0) * _JKOccluder.w;
             if (k <= 0.0) return;
             float dither = frac(52.9829189 * frac(dot(pixel, float2(0.06711056, 0.00583715))));
             clip(1.0 - k * 0.72 - dither);

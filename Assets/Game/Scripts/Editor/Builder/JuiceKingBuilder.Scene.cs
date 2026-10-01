@@ -140,6 +140,7 @@ namespace JuiceKing.EditorTools
         public static void ResetSave()
         {
             PlayerPrefs.DeleteKey("juiceking_save_v1");
+            PlayerPrefs.DeleteKey(GameManager.DebugWorldsKey);
             PlayerPrefs.Save();
             Debug.Log("[JuiceKing] Save data cleared");
         }

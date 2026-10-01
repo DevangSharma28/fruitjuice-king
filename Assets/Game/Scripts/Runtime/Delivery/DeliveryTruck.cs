@@ -20,6 +20,13 @@ namespace JuiceKing
         public Transform cargoFill;
         public Transform door;
         public Vector3 doorOpenEuler = new Vector3(0f, -100f, 0f);
+        [Tooltip("Optional second door (rear barn doors: one per side).")]
+        public Transform door2;
+        public Vector3 door2OpenEuler;
+        [Tooltip("Door swing speed (0..1 per second).")]
+        public float doorSpeed = 2.2f;
+        [Tooltip("Springy overshoot on the swing. Off for doors that fold back flat against the body.")]
+        public bool doorOvershoot = true;
         public Transform dropPoint;
         public Transform exhaust;
         public Renderer[] lights;
@@ -41,7 +48,9 @@ namespace JuiceKing
         float _smokeT;
         float _door;
         Vector3 _bodyBase;
-        Quaternion _doorClosed;
+        Quaternion _doorClosed, _door2Closed;
+        Quaternion _parkRot;
+        bool _hasParkRot;
         Vector3 _fillScale;
         float _fillShown, _fillTarget;
         Quaternion _bodyRot;
@@ -56,6 +65,7 @@ namespace JuiceKing
                 _bodyRot = body.localRotation;
             }
             if (door != null) _doorClosed = door.localRotation;
+            if (door2 != null) _door2Closed = door2.localRotation;
             if (cargoFill != null) _fillScale = cargoFill.localScale;
             if (engine != null)
             {
@@ -66,8 +76,11 @@ namespace JuiceKing
             SetFill(0f, true);
         }
 
-        public void Arrive(IList<Vector3> path, float fill)
+        /// <param name="parkRotation">The bay's parking rotation: the truck lines up with it on the last metres.</param>
+        public void Arrive(IList<Vector3> path, float fill, Quaternion? parkRotation = null)
         {
+            _hasParkRot = parkRotation.HasValue;
+            if (_hasParkRot) _parkRot = parkRotation.Value;
             gameObject.SetActive(true);
             _path.Clear();
             _path.AddRange(path);
@@ -87,6 +100,8 @@ namespace JuiceKing
         {
             gameObject.SetActive(true);
             transform.SetPositionAndRotation(pos, rot);
+            _parkRot = rot;
+            _hasParkRot = true;
             state = State.Parked;
             _speed = 0f;
             _door = 1f;
@@ -167,10 +182,16 @@ namespace JuiceKing
             float dt = Time.deltaTime;
             if (state == State.Arriving || state == State.Departing) Drive(dt);
 
-            // Cargo door swings open while parked.
+            // Parked: finish lining up with the bay (the path's last bend may leave it a few degrees off).
+            if (state == State.Parked && _hasParkRot)
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, _parkRot, dt * 120f);
+
+            // Cargo door(s) swing open while parked.
             float doorGoal = state == State.Parked ? 1f : 0f;
-            _door = Mathf.MoveTowards(_door, doorGoal, dt * 2.2f);
-            if (door != null) door.localRotation = _doorClosed * Quaternion.Euler(doorOpenEuler * Ease.OutBack(_door));
+            _door = Mathf.MoveTowards(_door, doorGoal, dt * doorSpeed);
+            float swing = doorOvershoot ? Ease.OutBack(_door) : Ease.InOutQuad(_door);
+            if (door != null) door.localRotation = _doorClosed * Quaternion.Euler(doorOpenEuler * swing);
+            if (door2 != null) door2.localRotation = _door2Closed * Quaternion.Euler(door2OpenEuler * swing);
 
             if (Mathf.Abs(_fillShown - _fillTarget) > 0.001f)
             {
@@ -251,7 +272,13 @@ namespace JuiceKing
             else transform.position = pos + d / dist * step;
 
             if (dist > 0.01f)
-                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(d), 1f - Mathf.Exp(-5f * dt));
+            {
+                var heading = Quaternion.LookRotation(d);
+                // Final approach: blend the heading into the bay's parking rotation so the truck stops square.
+                if (state == State.Arriving && _hasParkRot && remaining < 3.5f)
+                    heading = Quaternion.Slerp(heading, _parkRot, 1f - remaining / 3.5f);
+                transform.rotation = Quaternion.Slerp(transform.rotation, heading, 1f - Mathf.Exp(-5f * dt));
+            }
 
             if (wheels != null)
                 foreach (var w in wheels)

@@ -87,6 +87,23 @@ namespace JuiceKing.EditorTools
             return b;
         }
 
+        /// <summary>Dark HUD capsule that is also a button (currency counters that open the shop).</summary>
+        static Button CurrencyButton(RectTransform rt, Color tint)
+        {
+            var b = AtlasButton(rt, _uBtnGrey ? _uBtnGrey : _sPill, _uBtnGrey ? 1.1f : 0.9f);
+            b.targetGraphic.color = _uBtnGrey ? tint : UiDark;
+            return b;
+        }
+
+        /// <summary>Green "+" chip at the right end of a currency capsule.</summary>
+        static void PlusBadge(RectTransform capsule, float size, float x)
+        {
+            var rt = UIRect("Plus", capsule, new Vector2(1f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(x, 2f), new Vector2(size, size));
+            if (_uSqGreen != null) Img(rt, _uSqGreen, Color.white);
+            else Img(rt, _sCircle, new Color(0.3f, 0.78f, 0.3f));
+            Label(Stretch("Text", rt, 0f, 0f, 0f, size * 0.1f), "+", size * 0.95f, Color.white, TextAlignmentOptions.Center, true);
+        }
+
         static Button IconButton(RectTransform rt, Sprite s)
         {
             var img = Img(rt, s, Color.white, false, true);
@@ -259,16 +276,17 @@ namespace JuiceKing.EditorTools
             _uiSafeGroup = safe.gameObject.AddComponent<CanvasGroup>();
 
             // World progress (top centre, the player's main goal): crown badge, world name, big gold bar with the percentage.
-            // Layout across the 1080 px top bar: money 16-286 | progress 300-740 | golden apples 756-932 | settings 941-1059.
-            var prog = UIRect("Progress", safe, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-20f, -26f), new Vector2(440f, 132f));
+            // Layout across the 1080 px top bar: money 16-286 | progress 300-696 | golden apples 708-932 (ad tickets under
+            // them) | settings 941-1059.
+            var prog = UIRect("Progress", safe, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-42f, -26f), new Vector2(396f, 132f));
             if (_uBtnGrey != null) Sliced(prog, _uBtnGrey, 1.2f, new Color(1f, 1f, 1f, 0.94f));
             else Sliced(prog, _sPill, 0.9f, UiDark);
-            var caption = Label(UIRect("World", prog, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(132f, -12f), new Vector2(286f, 44f)),
+            var caption = Label(UIRect("World", prog, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(132f, -12f), new Vector2(244f, 44f)),
                 world == 0 ? "JUICE FARM" : world == 1 ? "TROPICAL FARM" : "BERRY BLAST", 32f, new Color(1f, 0.86f, 0.35f), TextAlignmentOptions.MidlineLeft, true);
             caption.enableAutoSizing = true;
             caption.fontSizeMin = 22f;
             caption.fontSizeMax = 32f;
-            var barBg = UIRect("Bar", prog, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(126f, 20f), new Vector2(294f, 58f));
+            var barBg = UIRect("Bar", prog, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(126f, 20f), new Vector2(252f, 58f));
             Img(barBg, _sPill, new Color(0.05f, 0.04f, 0.06f, 0.7f), true).pixelsPerUnitMultiplier = 1.4f;
             barBg.gameObject.AddComponent<Mask>().showMaskGraphic = true;
             var fillRt = Stretch("Fill", barBg, 5f, 5f, 5f, 5f);
@@ -303,16 +321,28 @@ namespace JuiceKing.EditorTools
             mText.fontSizeMin = 32f;
             mText.fontSizeMax = 56f;
 
-            // Golden Apples (premium): a gold capsule next to the settings gear, shared by every world.
-            var apples = UIRect("Apples", safe, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-148f, -44f), new Vector2(176f, 94f));
-            if (_uBtnGrey != null) Sliced(apples, _uBtnGrey, 1.1f, new Color(1f, 0.97f, 0.85f, 0.95f));
-            else Sliced(apples, _sPill, 0.9f, UiDark);
-            var appleIcon = UIRect("Icon", apples, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(26f, 4f), new Vector2(96f, 96f));
+            // Golden Apples (premium): a gold capsule next to the settings gear, shared by every world. The whole capsule
+            // is the shop button (the "+" marks it), so the touch target stays large.
+            var apples = UIRect("Apples", safe, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-148f, -40f), new Vector2(224f, 86f));
+            var applesBtn = CurrencyButton(apples, new Color(1f, 0.97f, 0.85f, 0.95f));
+            var appleIcon = UIRect("Icon", apples, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(24f, 4f), new Vector2(94f, 94f));
             Img(appleIcon, _sApple ? _sApple : _sStar, Color.white);
-            var appleText = Label(Stretch("Value", apples, 76f, 18f, 0f, 4f), "5", 52f, new Color(1f, 0.9f, 0.45f), TextAlignmentOptions.MidlineRight, true);
+            var appleText = Label(Stretch("Value", apples, 74f, 66f, 0f, 4f), "5", 50f, new Color(1f, 0.9f, 0.45f), TextAlignmentOptions.MidlineRight, true);
             appleText.enableAutoSizing = true;
-            appleText.fontSizeMin = 28f;
-            appleText.fontSizeMax = 52f;
+            appleText.fontSizeMin = 26f;
+            appleText.fontSizeMax = 50f;
+            PlusBadge(apples, 58f, -34f);
+
+            // Ad Tickets: a smaller capsule right under the apples, also opening the shop.
+            var tickets = UIRect("Tickets", safe, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-148f, -132f), new Vector2(190f, 56f));
+            var ticketsBtn = CurrencyButton(tickets, new Color(0.95f, 0.95f, 1f, 0.92f));
+            var ticketIcon = UIRect("Icon", tickets, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(20f, 2f), new Vector2(72f, 72f));
+            var ticketIconImg = Img(ticketIcon, _sTicket ? _sTicket : _sStar, Color.white);
+            var ticketText = Label(Stretch("Value", tickets, 58f, 50f, 0f, 3f), "0", 38f, new Color(1f, 0.8f, 0.64f), TextAlignmentOptions.MidlineRight, true);
+            ticketText.enableAutoSizing = true;
+            ticketText.fontSizeMin = 22f;
+            ticketText.fontSizeMax = 38f;
+            PlusBadge(tickets, 42f, -26f);
 
             // Settings (top right).
             var gear = UIRect("Settings", safe, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-80f, -96f), new Vector2(118f, 118f));
@@ -321,7 +351,8 @@ namespace JuiceKing.EditorTools
             Img(gIc, _uGear ? _uGear : _sStar, Color.white);
 
             // Objective on a wooden plank.
-            var obj = UIRect("Objective", safe, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -176f), new Vector2(940f, 136f));
+            // Starts below the ad-ticket capsule (bottom at 188); its bottom edge stays at 312 like before.
+            var obj = UIRect("Objective", safe, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -192f), new Vector2(940f, 120f));
             Sliced(obj, _uPlank ? _uPlank : _sPanel, 1.4f);
             var objText = Label(Stretch("Text", obj, 110f, 110f, 24f, 34f), "", 44f, Color.white, TextAlignmentOptions.Center, true);
             objText.enableAutoSizing = true;
@@ -388,6 +419,11 @@ namespace JuiceKing.EditorTools
             hud.applesPanel = apples;
             hud.applesIcon = appleIcon;
             hud.applesText = appleText;
+            hud.applesShopButton = applesBtn;
+            hud.ticketsText = ticketText;
+            hud.ticketsIcon = ticketIconImg;
+            hud.ticketsPanel = tickets;
+            hud.ticketsShopButton = ticketsBtn;
             hud.progressShine = shine;
 
             // ---------------- unlock banner (red ribbon)
@@ -508,7 +544,9 @@ namespace JuiceKing.EditorTools
             var setDim = setRoot.gameObject.AddComponent<Button>();
             setDim.targetGraphic = setDimImg;
             setDim.transition = Selectable.Transition.None;
-            var sw = UIRect("Window", setRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 60f), new Vector2(780f, 640f));
+            // The DEBUG row adds debugH; SettingsPopup removes it again in release builds.
+            const float debugH = 220f;
+            var sw = UIRect("Window", setRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 60f), new Vector2(780f, 640f + debugH));
             Sliced(sw, _uPanelPlain ? _uPanelPlain : _sPanel, panelScale, null, true);
             Label(UIRect("Title", sw, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, plankY), new Vector2(460f, 100f)),
                 "SETTINGS", 56f, Color.white, TextAlignmentOptions.Center, true);
@@ -527,6 +565,26 @@ namespace JuiceKing.EditorTools
             }
             var sndImg = Toggle("Sound", -300f, out var sndBtn);
             var ambImg = Toggle("Ambience", -470f, out var ambBtn);
+            // DEBUG: jump to any world (Editor and development builds only).
+            var dbg = UIRect("Debug", sw, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -560f), new Vector2(620f, 190f));
+            Sliced(dbg, _uCard ? _uCard : _sPanel, 1.3f, new Color(0.85f, 0.92f, 1f));
+            Label(UIRect("Label", dbg, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -40f), new Vector2(560f, 50f)),
+                "DEBUG: SWITCH WORLD", 36f, new Color(0.25f, 0.35f, 0.6f), TextAlignmentOptions.Center, false);
+            string[] worldNames = { "FARM", "TROPICAL", "BERRY" };
+            var worldBtns = new Button[worldNames.Length];
+            for (int i = 0; i < worldNames.Length; i++)
+            {
+                var wb = UIRect("World" + i, dbg, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2((i - 1) * 192f, 24f), new Vector2(180f, 92f));
+                var btn = AtlasButton(wb, _uBtnBlue ? _uBtnBlue : _sButton, 1.9f);
+                btn.transition = Selectable.Transition.SpriteSwap;
+                var grey = _uBtnGrey ? _uBtnGrey : _sButton;
+                btn.spriteState = new SpriteState { disabledSprite = grey, pressedSprite = _uBtnBlue, highlightedSprite = _uBtnBlue, selectedSprite = _uBtnBlue };
+                var wl = Label(Stretch("Text", wb, 10f, 10f, 0f, 12f), worldNames[i], 36f, Color.white, TextAlignmentOptions.Center, true);
+                wl.enableAutoSizing = true;
+                wl.fontSizeMin = 22f;
+                wl.fontSizeMax = 36f;
+                worldBtns[i] = btn;
+            }
             var sClose = CloseHotspot(sw, _uPanelPlain, _uPanelPlain ? _uPanelPlain.name : "", panelScale);
             var settings = setRoot.gameObject.AddComponent<SettingsPopup>();
             settings.window = sw;
@@ -539,6 +597,9 @@ namespace JuiceKing.EditorTools
             settings.ambienceButton = ambBtn;
             settings.toggleOn = _uToggleOn;
             settings.toggleOff = _uToggleOff;
+            settings.debugRoot = dbg.gameObject;
+            settings.debugWorldButtons = worldBtns;
+            settings.debugHeight = debugH;
 
             // ---------------- expansion: delivery card, world-complete popup, intro overlay
             _uiDelivery = world >= 1 ? BuildDeliveryHUD(safe) : null;
@@ -548,6 +609,7 @@ namespace JuiceKing.EditorTools
             _uiIntro = world >= 1 ? BuildIntroOverlay(root) : null;
             _uiFox = world >= 2 ? BuildFoxHUD(safe) : null;
             BuildPremiumPopup(root);
+            BuildShopPopup(root);
 
             // ---------------- simulated ad overlay (always on top)
             var adRoot = Stretch("AdOverlay", root);

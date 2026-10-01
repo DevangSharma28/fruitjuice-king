@@ -50,7 +50,7 @@ namespace JuiceKing.EditorTools
         static Material[] _mBerry = new Material[FruitN];
         static Material _mBerryLeaf, _mSponge, _mCreamWhite, _mCrust, _mTin, _mPunnet, _mPunnetPink, _mPunnetBlue, _mIce, _mLime, _mGoldLid;
         static Sprite[] _sCakeIcons = new Sprite[FruitN];
-        static Sprite _sApple, _sFox, _sOven, _sMixer, _sCakeShop;
+        static Sprite _sApple, _sFox, _sOven, _sMixer, _sCakeShop, _sTicket, _sNoAds;
         static StackItem _moneyPrefab;
         static FloatingText _floatingText;
         static List<GameObject> _customerPrefabs = new List<GameObject>();
@@ -370,6 +370,8 @@ namespace JuiceKing.EditorTools
             for (int i = 7; i < FruitN; i++) _sCakeIcons[i] = MatLib.Spr(ArtGen.CakeIconFile(i));
             var atlasApple = UIKit.Get("b_icon_apple");
             _sApple = atlasApple != null ? atlasApple : MatLib.Spr("icon_golden_apple.png");
+            _sTicket = MatLib.Spr(ArtGen.TicketIcon);
+            _sNoAds = MatLib.Spr(ArtGen.NoAdsIcon);
             _sFox = MatLib.Spr("icon_fox.png");
             _sOven = MatLib.Spr("icon_oven.png");
             _sMixer = MatLib.Spr("icon_mixer.png");
@@ -776,30 +778,6 @@ namespace JuiceKing.EditorTools
             // Soft blob shadow for readability.
             B.Decal("Blob", root.transform, _mBlob, new Vector3(0f, 0.075f, 0f), new Vector2(1.1f, 1.1f)).GetComponent<MeshRenderer>().sortingOrder = -2;
             return root;
-        }
-
-        static Chainsaw BuildChainsaw(Transform parent, Vector3 localPos, float volume)
-        {
-            var saw = B.Node("Chainsaw", parent, localPos);
-            var body = B.Box("Body", saw.transform, _mOrangeBody, new Vector3(0f, 0f, 0f), new Vector3(0.22f, 0.24f, 0.36f));
-            B.Box("Handle", saw.transform, _mDark, new Vector3(0f, 0.17f, -0.02f), new Vector3(0.05f, 0.05f, 0.26f));
-            B.Box("HandleL", saw.transform, _mDark, new Vector3(0f, 0.1f, 0.1f), new Vector3(0.05f, 0.14f, 0.04f));
-            B.Box("HandleR", saw.transform, _mDark, new Vector3(0f, 0.1f, -0.13f), new Vector3(0.05f, 0.14f, 0.04f));
-            B.Box("Stripe", saw.transform, _mDark, new Vector3(0f, -0.04f, 0f), new Vector3(0.225f, 0.05f, 0.365f));
-            var blade = B.Node("Blade", saw.transform, new Vector3(0f, -0.02f, 0.5f));
-            B.Box("Bar", blade.transform, _mSteel, Vector3.zero, new Vector3(0.05f, 0.12f, 0.68f));
-            B.MeshObj("Tip", blade.transform, B.Cylinder, _mSteel, new Vector3(0f, 0f, 0.34f), new Vector3(0.12f, 0.025f, 0.12f), new Vector3(0f, 0f, 90f));
-            var chain = B.Box("Chain", blade.transform, _mChain, Vector3.zero, new Vector3(0.035f, 0.16f, 0.72f));
-            var c = saw.AddComponent<Chainsaw>();
-            c.bladeVisual = blade.transform;
-            c.chainRenderer = chain.GetComponent<MeshRenderer>();
-            var src = saw.AddComponent<AudioSource>();
-            src.playOnAwake = true;
-            src.loop = true;
-            src.spatialBlend = 0f;
-            c.audioSource = src;
-            c.volumeScale = volume;
-            return c;
         }
 
         static GameObject BuildPlayerObject()

@@ -9,6 +9,11 @@ namespace JuiceKing
         public Transform owner;
         public Transform bladeVisual;
         public Renderer chainRenderer;
+        [Tooltip("Engine mesh: rumbles while the saw revs.")]
+        public Transform engine;
+        public Transform exhaust;
+        [Tooltip("Puff exhaust smoke while cutting (the player's saw only, to keep particles down).")]
+        public bool exhaustPuffs;
         public AudioSource audioSource;
         public float range = 1.1f;
         public float dps = 7f;
@@ -22,15 +27,20 @@ namespace JuiceKing
 
         float _tick;
         Vector3 _bladeBase;
-        Material _chainMat;
+        Vector3 _engineScale;
+        // The chain runs by scrolling its texture through a property block: no per-saw material copy.
+        static readonly int BaseMapST = Shader.PropertyToID("_BaseMap_ST");
+        MaterialPropertyBlock _chainBlock;
         float _chainOffset;
         float _rev;
+        float _puffT;
 
         void Awake()
         {
             if (owner == null) owner = transform;
             if (bladeVisual != null) _bladeBase = bladeVisual.localPosition;
-            if (chainRenderer != null) _chainMat = chainRenderer.material;
+            if (chainRenderer != null) _chainBlock = new MaterialPropertyBlock();
+            if (engine != null) _engineScale = engine.localScale;
             if (audioSource != null)
             {
                 audioSource.clip = Sfx.ChainsawClip;
@@ -73,10 +83,28 @@ namespace JuiceKing
                 bladeVisual.localPosition = _bladeBase + new Vector3(Random.Range(-j, j), Random.Range(-j, j), Random.Range(-j, j));
             }
 
-            if (_chainMat != null)
+            if (_chainBlock != null)
             {
-                _chainOffset += dt * (1.5f + _rev * 8f);
-                _chainMat.mainTextureOffset = new Vector2(_chainOffset, 0f);
+                _chainOffset = Mathf.Repeat(_chainOffset + dt * (0.6f + _rev * 5f), 1f);
+                _chainBlock.SetVector(BaseMapST, new Vector4(1f, 1f, -_chainOffset, 0f));
+                chainRenderer.SetPropertyBlock(_chainBlock);
+            }
+
+            // Engine rumble: a fast, tiny squash that grows with the revs.
+            if (engine != null)
+            {
+                float r = Mathf.Sin(Time.time * 70f) * (0.012f + _rev * 0.03f);
+                engine.localScale = new Vector3(_engineScale.x * (1f - r * 0.5f), _engineScale.y * (1f + r), _engineScale.z);
+            }
+
+            if (exhaustPuffs && exhaust != null && IsCutting)
+            {
+                _puffT -= dt;
+                if (_puffT <= 0f)
+                {
+                    _puffT = 0.35f;
+                    Fx.Smoke(exhaust.position, 0.85f, 1);
+                }
             }
 
             if (audioSource != null)

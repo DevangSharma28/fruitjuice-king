@@ -32,12 +32,30 @@ namespace JuiceKing
 
         public static bool Busy { get; private set; }
 
-        public static bool IsReady => !Busy && (Provider != null ? Provider.IsReady : SimulateWhenNoProvider);
+        /// <summary>Spend an Ad Ticket (when the player has one) instead of playing the video.</summary>
+        public static bool UseTickets = true;
+
+        static bool HasTicket => UseTickets && GameManager.I != null && GameManager.I.Tickets > 0;
+
+        public static bool IsReady => !Busy && (HasTicket || (Provider != null ? Provider.IsReady : SimulateWhenNoProvider));
+
+        /// <summary>
+        /// False once Remove Ads was bought. Any forced ad (interstitial, banner) must check this; rewarded ads are
+        /// optional and stay available.
+        /// </summary>
+        public static bool ForcedAdsAllowed => GameManager.I == null || !GameManager.I.NoAds;
 
         public static event Action<string> Rewarded;
 
         public static void ShowRewarded(string placement, Action onReward, Action onFail = null)
         {
+            if (!Busy && HasTicket && GameManager.I.TrySpendTicket())
+            {
+                Rewarded?.Invoke(placement);
+                onReward?.Invoke();
+                return;
+            }
+
             if (!IsReady)
             {
                 onFail?.Invoke();

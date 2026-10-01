@@ -113,9 +113,9 @@ namespace JuiceKing.EditorTools
                 if (j is BerryPress bp)
                 {
                     // Keep every animated part of the press separate.
-                    var keep = new List<Transform> { bp.drum, bp.piston, bp.gaugeNeedle, bp.statusLight != null ? bp.statusLight.transform : null };
+                    var keep = new List<Transform> { bp.crusher, bp.pulp, bp.heap, bp.liquid, bp.stream, bp.statusLight != null ? bp.statusLight.transform : null };
                     if (bp.pipeBlobs != null) keep.AddRange(bp.pipeBlobs);
-                    if (bp.ringLights != null) foreach (var r in bp.ringLights) if (r != null) keep.Add(r.transform);
+                    if (bp.progressLights != null) foreach (var r in bp.progressLights) if (r != null) keep.Add(r.transform);
                     CombineUnder(j.body, keep.ToArray());
                 }
                 else CombineUnder(j.body, j.blades, j.liquid, j.statusLight != null ? j.statusLight.transform : null);

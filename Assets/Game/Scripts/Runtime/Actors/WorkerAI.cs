@@ -87,7 +87,17 @@ namespace JuiceKing
             _task = Task.Idle;
             _think = 0.3f;
             // Farmers only ever carry slices; they must not grab cups while crossing a juicer's tray pad.
-            if (role == Role.Farmer) carrier.pickupFilter = t => t.IsSlice();
+            // and only their own field's kind, or a neighbour's stray berries could never be delivered (the farmer would
+            // stay in Deliver forever).
+            if (role == Role.Farmer)
+            {
+                if (field != null)
+                {
+                    var own = ItemTypes.Slice(field.kind);
+                    carrier.pickupFilter = t => t == own;
+                }
+                else carrier.pickupFilter = t => t.IsSlice();
+            }
             else if (role == Role.Loader) carrier.pickupFilter = t => t.IsSellable();
         }
 

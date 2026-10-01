@@ -3,7 +3,10 @@ using UnityEngine.UI;
 
 namespace JuiceKing
 {
-    /// <summary>Small settings card: sound effects and ambience toggles.</summary>
+    /// <summary>
+    /// Small settings card: sound effects and ambience toggles. In the Editor and development builds it also shows a
+    /// DEBUG row that jumps between the three worlds (<see cref="GameManager.DebugSwitchWorld"/>).
+    /// </summary>
     public class SettingsPopup : MonoBehaviour
     {
         public static SettingsPopup I { get; private set; }
@@ -17,6 +20,13 @@ namespace JuiceKing
         public Button soundButton;
         public Button ambienceButton;
         public Sprite toggleOn, toggleOff;
+
+        [Header("Debug (Editor / development builds)")]
+        public GameObject debugRoot;
+        [Tooltip("One button per world, in world order.")]
+        public Button[] debugWorldButtons;
+        [Tooltip("Window height the debug row adds (removed in release builds).")]
+        public float debugHeight;
 
         bool _open;
 
@@ -38,6 +48,15 @@ namespace JuiceKing
                 Sfx.Play(SfxId.Click, 0.6f);
                 Refresh(true);
             });
+            bool debug = Debug.isDebugBuild;
+            if (debugRoot != null) debugRoot.SetActive(debug);
+            if (!debug && window != null) window.sizeDelta -= new Vector2(0f, debugHeight);
+            if (debug && debugWorldButtons != null)
+                for (int i = 0; i < debugWorldButtons.Length; i++)
+                {
+                    int world = i;
+                    debugWorldButtons[i].onClick.AddListener(() => SwitchWorld(world));
+                }
             gameObject.SetActive(false);
         }
 
@@ -64,8 +83,19 @@ namespace JuiceKing
             });
         }
 
+        void SwitchWorld(int world)
+        {
+            if (GameManager.I == null || world == GameManager.I.data.expansion) return;
+            Sfx.Play(SfxId.Click, 0.6f);
+            Close();
+            GameManager.I.DebugSwitchWorld(world);
+        }
+
         void Refresh(bool punch)
         {
+            if (debugWorldButtons != null && GameManager.I != null)
+                for (int i = 0; i < debugWorldButtons.Length; i++)
+                    debugWorldButtons[i].interactable = i != GameManager.I.data.expansion;
             soundToggle.sprite = Sfx.Muted ? toggleOff : toggleOn;
             ambienceToggle.sprite = Sfx.AmbienceOn ? toggleOn : toggleOff;
             if (punch)

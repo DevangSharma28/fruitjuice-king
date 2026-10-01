@@ -20,6 +20,7 @@ Developers: see [`CLAUDE.md`](../../CLAUDE.md) in the project root for architect
 - `M` adds $500.
 - `F9` resets progress (back to the original farm).
 - `F10` opens the world-complete popup without finishing the world.
+- **Settings ▸ DEBUG: SWITCH WORLD** jumps to Farm, Tropical or Berry. Each world's progress is parked and comes back when you return; Golden Apples, Ad Tickets, Remove Ads and stats are shared. A world you haven't visited starts fresh. The row is hidden in release builds.
 - **Juice King ▸ Reset Save Data** clears the save from the menu.
 
 ## Core loop
@@ -157,7 +158,7 @@ Around it: pastel cottages, a bakery with a smoking chimney, blossom trees, a fo
 | Blueberry | Blueberry Shake (milk bottle) | Blueberry Cheesecake |
 | Cranberry | Cranberry Cooler (tumbler with ice and lime) | Cranberry Tart |
 
-**Berry presses** (`BerryPress`, a `Juicer` with a richer show). Berries tumble in a glass drum, a piston presses them in three strokes, juice pulses down a clear pipe, a gauge sweeps round and a ring of lights fills as the batch completes; the gold crown on the sign bounces on every cup.
+**Berry crushers** (`BerryPress`, a `Juicer` with a richer show). The hopper is heaped with the berries waiting in the crate. Two spiked rollers spin against each other and thump four times per batch, juice sprays from the nip and pulses through a glass pipe into a tank that fills with the batch, a row of lights counts the progress, and the spout pours a stream into every bottle. The gold crown on the sign (back corner) bounces on every bottle.
 
 **Berry Cake Shop** (a second business with its own queue):
 1. Bring berries to the **cake mixer** (yellow pad south of it). Three berries make one tin of batter: flour puffs from the sack, the whisk spins, the bowl turns.
@@ -176,7 +177,7 @@ The **Baker** helper serves the cake queue from the ovens; **farmhands** alterna
 **Delivery desks.** Two desks (Desk B unlocks later), each with its own trucks and order board. Trucks are new too: rounded cabs with headlight "eyes" and a smiling grille, mirrors, fenders, brake lights, a berry mural and a roof mascot per type (Berry Van, Smoothie Co., Party Time, Royal Berry). They brake smoothly into the lay-by, the body dips and settles.
 1. The truck stops and an **empty box** pops up on the pad beside it, flaps open.
 2. Stand on the pad with the ordered juice (or cakes, once the Cake Shop bakes): items fly in, the box fills, the label counts up.
-3. When it is full the flaps fold shut, tape seals it, and the box is lifted into the truck's cargo door; the truck dips under the weight, you get the payout and a **Golden Apple**, and the truck drives away.
+3. When it is full the flaps fold shut, tape seals it, and the box is lifted into the truck's open rear doors (Berry Blast trucks park square in the bay, swing their barn doors round flat against the sides and show the parcel stack growing in the hold); the truck dips under the weight, you get the payout and a **Golden Apple**, and the truck drives away.
 - The first truck is always an easy juice order. Later trucks may order cakes (fewer items, bigger rewards).
 - The **Loader** fills whichever desk needs it.
 
@@ -184,7 +185,7 @@ The **Baker** helper serves the cake queue from the ovens; **farmhands** alterna
 
 ## Golden Apples (premium currency)
 
-Golden Apples are shown next to the settings gear in every world and are kept when you move to a new world.
+Golden Apples are shown next to the settings gear in every world and are kept when you move to a new world. Tap the counter (its green **+**) to open the shop.
 
 | Earn | Spend |
 |---|---|
@@ -193,6 +194,25 @@ Golden Apples are shown next to the settings gear in every world and are kept wh
 | 1 per Berry Blast delivery, 2 per premium truck | **1 per 12 missing items** to finish a truck order at once |
 
 Rewards fly up to the counter with a chime; spending sparkles. Numbers live in `Economy` (`StartingApples`, `ApplesRestoreFarm`, `ApplesCallTruck`, `ApplesFinishOrder`). The **WATCH AD** button is the free alternative wherever a restore is offered.
+
+## Shop (in-app purchases)
+
+The **+** on the Golden Apple counter opens the shop on its apple packs; the **+** on the smaller **Ad Ticket** counter under it opens it on the ticket packs. The shop is one scrolling popup:
+
+- **GOLDEN APPLES:** six packs (Starter, Small, Medium, Large, Mega, Ultimate) with a growing pile of apples, a bonus line and a price button. Medium is tagged **POPULAR**, Ultimate **BEST VALUE** (gold glow and rays).
+- **AD TICKETS:** six packs. One ticket claims a rewarded-ad reward (boosts, free cash, offline x2, fox restore...) instantly, without the video. Tickets are used automatically whenever you have one; a toast says "Ad Ticket used!".
+- **REMOVE ADS:** removes forced ads for good and shows **OWNED** afterwards. Rewarded ads stay available as optional rewards.
+- **Restore Purchases** at the bottom (required by the App Store for Remove Ads).
+
+Products, quantities, bonus lines, badges and fallback prices are data in `Core/IapCatalog.cs` (`IapCatalog.Products`); the cards read them at runtime, so retuning needs no rebuild (adding, removing or reordering products does: rebuild the scenes). Product ids (`jk_apples_starter`...) must match the store and must never be renamed once shipped.
+
+**Purchases are simulated.** `Core/Iap.cs` is the single entry point. Without a store provider, a purchase completes after 0.6 s in the Editor and development builds only; release builds show "Store not available" instead of granting anything. To ship real purchases:
+
+1. Implement `IIapProvider` (`IsReady`, `LocalizedPrice(id)`, `Purchase(id, done)`, `Restore(done)`) on top of Unity IAP and register the `IapCatalog` ids with the stores.
+2. At startup, assign it: `Iap.Provider = new MyStore();`. Localized prices replace the fallback prices automatically.
+3. For purchases that complete outside the shop (pending at launch, restores), call `Iap.Deliver(id)`. It returns false while no world is loaded (loading screen): keep the transaction pending and deliver it later.
+
+Forced ads (interstitials, banners) don't exist yet; when they are added they must check `Ads.ForcedAdsAllowed`.
 
 ## Loading screen
 
@@ -270,12 +290,12 @@ Hand edits to the generated scenes are overwritten on rebuild. Put layout change
 | Path | What it holds |
 |---|---|
 | `Scripts/Runtime/Core/Items.cs` | Item types and **all balance numbers** (`Balance`): HP, slices, prices, juice time, upgrade costs |
-| `Scripts/Runtime/Core` | GameManager (money, save, unlocks, offline earnings), Boosts (timed ad boosts), Ads (rewarded-ad entry point), Tweener, Pool, Sfx (procedural audio), Fx (particles), CameraFollow, NavBaker |
+| `Scripts/Runtime/Core` | GameManager (money, save, unlocks, offline earnings), Boosts (timed ad boosts), Ads (rewarded-ad entry point), Iap + IapCatalog (store products and purchase flow), Tweener, Pool, Sfx (procedural audio), Fx (particles), CameraFollow, NavBaker |
 | `Scripts/Runtime/Items` | Carrier (swaying back/hand stack), ItemPile (grid piles), LooseItems (ground pickups), StackItem |
 | `Scripts/Runtime/Stations` | FruitNode/FruitField, Juicer, Counter, CashPile, TrashBin |
 | `Scripts/Runtime/Zones` | Floor pads: Drop, Pickup, Cash, Upgrade, Unlock, Trash, plus UnlockManager |
 | `Scripts/Runtime/Actors` | Player, Chainsaw, Customer + CustomerManager (queue/payment), WorkerAI (farmer/waiter on NavMesh), CharacterAnim |
-| `Scripts/Runtime/UI` | HUD (money, shop progress, flying coins), BoostBar, OfferPopup, AdOverlay, UnlockBanner, UpgradePanel, InputJoystick, Tutorial, OrderBubble, FloatingText, UIPress, UISpin |
+| `Scripts/Runtime/UI` | HUD (money, shop progress, Golden Apple and Ad Ticket counters, flying coins), ShopPopup (in-app purchase shop), BoostBar, OfferPopup, AdOverlay, UnlockBanner, UpgradePanel, InputJoystick, Tutorial, OrderBubble, FloatingText, UIPress, UISpin |
 | `Scripts/Runtime/Core/Economy.cs` | World-aware numbers (`Economy`), `UpgradeDef` and the per-world upgrade trees (`Upgrades`) |
 | `Scripts/Runtime/Delivery` | DeliveryManager (schedule, orders, payout, save), DeliveryOrder (truck types, clients, rewards), DeliveryTruck (drive, park, door, cargo fill), DeliveryBay, DeliveryZone (loading pad), TruckBoard, DeliveryHUD |
 | `Scripts/Runtime/Expansion` | ExpansionManager (world-complete check, scene switch), CompletionPopup, ExpansionIntro, ScreenFader |

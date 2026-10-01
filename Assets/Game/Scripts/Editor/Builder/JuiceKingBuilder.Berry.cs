@@ -497,7 +497,9 @@ namespace JuiceKing.EditorTools
             var paths = B.Node("Path", root, Vector3.zero).transform;
             void Bay(string key, Vector3 park, out Transform[] arrive, out Transform parkT, out Transform[] depart)
             {
-                var inCtrl = new[] { new Vector3(x, 0f, -70f), new Vector3(x, 0f, park.z - 9f), new Vector3(x - 1.5f, 0f, park.z - 4.2f), park };
+                // Swing in off the road, then a straight last 2 m into the bay so the truck stops square to its lines.
+                var inCtrl = new[] { new Vector3(x, 0f, -70f), new Vector3(x, 0f, park.z - 10f), new Vector3(park.x + 1.5f, 0f, park.z - 5f),
+                    new Vector3(park.x, 0f, park.z - 2.2f), park };
                 var outCtrl = new[] { park, new Vector3(park.x + 0.3f, 0f, park.z + 3.4f), new Vector3(x - 0.8f, 0f, park.z + 6.6f), new Vector3(x, 0f, park.z + 13f), new Vector3(x, 0f, 70f) };
                 var inPts = Spline(inCtrl, 1.2f);
                 var outPts = Spline(outCtrl, 1.2f);
@@ -703,7 +705,7 @@ namespace JuiceKing.EditorTools
             var basket = B.Node("Treats", t, new Vector3(-0.5f, 0.05f, -0.3f)).transform;
             B.MeshObj("Plate", basket, _disc, new[] { _mWhite, _mWhite }, Vector3.zero, new Vector3(0.5f, 0.03f, 0.5f), null, false);
             for (int i = 0; i < 5; i++) Berry(basket, 7 + i % 4, new Vector3(-0.12f + (i % 3) * 0.12f, 0.08f, -0.08f + (i / 3) * 0.14f), 0.12f, i * 50f);
-            BlossomTree(t, new Vector3(-1.6f, 0f, 1.4f), 1.1f, false);
+            BlossomTree(t, new Vector3(-2.3f, 0f, 2.2f), 1.1f, false); // behind the blanket, clear of its unlock pad
             B.Prop("Nature/stump_round", t, new Vector3(1.5f, 0f, 1.1f), 1.6f);
             Busy(pos.x, pos.z, 3f);
             return root;
@@ -769,7 +771,6 @@ namespace JuiceKing.EditorTools
                 }
             }
             FlowerRow(new Vector3(-12.2f, 0f, -1f), new Vector3(-12.2f, 0f, 9f), 12);
-            FlowerRow(new Vector3(12.2f, 0f, 3f), new Vector3(12.2f, 0f, 9f), 8);
             FlowerRow(new Vector3(-12f, 0f, 12f), new Vector3(-12f, 0f, 22f), 12);
             FlowerRow(new Vector3(-11f, 0f, 29.4f), new Vector3(-5f, 0f, 29.4f), 8);
             FlowerRow(new Vector3(5f, 0f, 29.4f), new Vector3(11f, 0f, 29.4f), 8);

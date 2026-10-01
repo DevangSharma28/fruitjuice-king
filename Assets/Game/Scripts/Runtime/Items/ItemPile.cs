@@ -88,6 +88,15 @@ namespace JuiceKing
             return c;
         }
 
+        /// <summary>Like <see cref="CountOf"/> but only items that have landed (the ones <see cref="TakeLast"/> can take).</summary>
+        public int CountReady(Predicate<ItemType> filter)
+        {
+            int c = 0;
+            for (int i = 0; i < items.Count; i++)
+                if (!items[i].inTransit && filter(items[i].type)) c++;
+            return c;
+        }
+
         Vector3 SlotLocalOf(StackItem item)
         {
             int idx = items.IndexOf(item);

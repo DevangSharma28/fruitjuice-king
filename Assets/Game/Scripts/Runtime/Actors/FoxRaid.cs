@@ -147,7 +147,8 @@ namespace JuiceKing
 
         static bool PopupOpen() =>
             (OfferPopup.I != null && OfferPopup.I.IsOpen) || (PremiumPopup.I != null && PremiumPopup.I.IsOpen) ||
-            (UpgradePanel.I != null && UpgradePanel.I.IsOpen) || (DeliveryPopup.I != null && DeliveryPopup.I.IsOpen);
+            (UpgradePanel.I != null && UpgradePanel.I.IsOpen) || (DeliveryPopup.I != null && DeliveryPopup.I.IsOpen) ||
+            (ShopPopup.I != null && ShopPopup.I.IsOpen);
 
         /// <summary>A random open, healthy farm (the fox prefers the one the player is not standing in).</summary>
         Farm PickFarm()

@@ -26,47 +26,59 @@ namespace JuiceKing
             public GameObject[] preview;
         }
 
-        readonly System.Collections.Generic.List<GameObject> _previewed = new System.Collections.Generic.List<GameObject>();
-        readonly System.Collections.Generic.List<Vector3> _previewScale = new System.Collections.Generic.List<Vector3>();
-        readonly System.Collections.Generic.List<MonoBehaviour> _paused = new System.Collections.Generic.List<MonoBehaviour>();
+        /// <summary>A locked object shown during the tour, with the scripts that were paused on it.</summary>
+        class Preview
+        {
+            public GameObject go;
+            public Vector3 scale;
+            public readonly System.Collections.Generic.List<MonoBehaviour> paused = new System.Collections.Generic.List<MonoBehaviour>();
+        }
 
-        /// <summary>Pop locked stations in for the shot (scripts disabled, so nothing registers, spawns or saves).</summary>
+        readonly System.Collections.Generic.List<Preview> _previews = new System.Collections.Generic.List<Preview>();
+
         void ShowPreview(GameObject[] objs)
         {
-            HidePreview();
+            // The previous shot's previews shrink away instead of blinking out (they are often still in frame).
+            HidePreview(true);
             if (objs == null) return;
             foreach (var go in objs)
             {
                 if (go == null || go.activeSelf) continue;
+                var pv = new Preview { go = go, scale = go.transform.localScale };
                 foreach (var b in go.GetComponentsInChildren<MonoBehaviour>(true))
                     if (b.enabled)
                     {
                         b.enabled = false;
-                        _paused.Add(b);
+                        pv.paused.Add(b);
                     }
                 go.SetActive(true);
-                _previewed.Add(go);
-                var s = go.transform.localScale;
-                _previewScale.Add(s);
-                Tweener.Scale(go.transform, Vector3.zero, s, 0.45f, Ease.OutBack);
+                _previews.Add(pv);
+                Tweener.Scale(go.transform, Vector3.zero, pv.scale, 0.45f, Ease.OutBack);
             }
         }
 
-        void HidePreview()
+        void HidePreview(bool animated = false)
         {
-            for (int i = 0; i < _previewed.Count; i++)
+            foreach (var pv in _previews)
             {
-                var go = _previewed[i];
-                if (go == null) continue;
-                Tweener.Kill(go.transform);
-                go.transform.localScale = _previewScale[i];
-                go.SetActive(false);
+                if (pv.go == null) continue;
+                var p = pv;
+                Tweener.Kill(p.go.transform);
+                if (animated && p.go.activeInHierarchy)
+                    Tweener.Scale(p.go.transform, p.go.transform.localScale, Vector3.zero, 0.3f, Ease.InQuad, () => Restore(p));
+                else Restore(p);
             }
-            foreach (var b in _paused)
+            _previews.Clear();
+        }
+
+        /// <summary>Back to locked: deactivate first, then re-enable the scripts (so a previewed juicer never registers).</summary>
+        static void Restore(Preview p)
+        {
+            if (p.go == null) return;
+            p.go.SetActive(false);
+            p.go.transform.localScale = p.scale;
+            foreach (var b in p.paused)
                 if (b != null) b.enabled = true;
-            _previewed.Clear();
-            _previewScale.Clear();
-            _paused.Clear();
         }
 
         public RectTransform topBar, bottomBar;
@@ -193,7 +205,7 @@ namespace JuiceKing
             CameraFollow.Peek(GameRefs.I.player.transform.position, 0.2f, 1f, () =>
             {
                 ShowCaption(null);
-                HidePreview();
+                HidePreview(true);
             }, Finish, 1f, 0.3f);
         }
 

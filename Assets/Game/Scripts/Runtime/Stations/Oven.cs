@@ -56,7 +56,7 @@ namespace JuiceKing
         }
 
         protected override bool CanStart() =>
-            !_loading && feeder != null && feeder.isActiveAndEnabled && outputPile.HasSpace && feeder.outputPile.CountOf(Accepts) > 0;
+            !_loading && feeder != null && feeder.isActiveAndEnabled && outputPile.HasSpace && feeder.outputPile.CountReady(Accepts) > 0;
 
         protected override void Begin()
         {

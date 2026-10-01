@@ -91,7 +91,7 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!1 &305860180973430146
+--- !u!1 &437834234546961968
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -99,8 +99,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 4249066056448665320}
-  - component: {fileID: 2888145420506335168}
+  - component: {fileID: 6881187413686332447}
+  - component: {fileID: 4384390507720711930}
   m_Layer: 0
   m_Name: Bg
   m_TagString: Untagged
@@ -108,13 +108,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &4249066056448665320
+--- !u!4 &6881187413686332447
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 305860180973430146}
+  m_GameObject: {fileID: 437834234546961968}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -123,14 +123,14 @@ Transform:
   m_Children: []
   m_Father: {fileID: 3015607386071887101}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!212 &2888145420506335168
+--- !u!212 &4384390507720711930
 SpriteRenderer:
   serializedVersion: 2
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 305860180973430146}
+  m_GameObject: {fileID: 437834234546961968}
   m_Enabled: 1
   m_CastShadows: 0
   m_ReceiveShadows: 0
@@ -695,7 +695,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 4249066056448665320}
+  - {fileID: 6881187413686332447}
   - {fileID: 960546065964048225}
   m_Father: {fileID: 4415480569930446607}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -1149,7 +1149,7 @@ MonoBehaviour:
   hands: {fileID: 4097668655992416848}
   bubble: {fileID: 9022770799890939162}
   anim: {fileID: 1883255977030512363}
-  speed: 3.033671
+  speed: 2.8189788
   want: 0
   wantCount: 0
   got: 0

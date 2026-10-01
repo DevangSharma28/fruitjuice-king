@@ -38,7 +38,8 @@ A 3D arcade-idle mobile game in the style of *Chainsaw Juice King: Idle Shop*, b
 Assets/Game/
   Scripts/Runtime/     game code (namespace JuiceKing)
     Core/              GameManager (money, unlocks, save), Economy + Upgrades, Items (item types, Balance),
-                       Boosts, Ads, Platform, Tweener, Pool, Sfx (synth audio), Fx (particles), CameraFollow, NavBaker
+                       Boosts, Ads, Iap + IapCatalog (shop products, purchase flow), Platform, Tweener, Pool, Sfx (synth audio),
+                       Fx (particles), CameraFollow, NavBaker
     Items/             Carrier (back/hand stack), ItemPile, LooseItems (ground pickups), StackItem
     Stations/          FruitNode / TropicalFruitNode / BerryBushNode / FruitField, Juicer (= mixer) / BerryPress, Counter (juice or cake),
                        Processor → CakeMixer / Oven (cake chain), CashPile, TrashBin
@@ -48,7 +49,8 @@ Assets/Game/
     Delivery/          DeliveryManager (one per desk), DeliveryOrder, DeliveryTruck, DeliveryBay, DeliveryZone, DeliveryBox,
                        TruckBoard (3D order sign), DeliveryHUD (parcel button), DeliveryPopup
     Expansion/         ExpansionManager (world complete, scene switch), CompletionPopup, ExpansionIntro, ScreenFader
-    UI/                HUD (money, progress, Golden Apples), Tutorial, UpgradePanel, BoostBar, OfferPopup, PremiumPopup, FoxHUD,
+    UI/                HUD (money, progress, Golden Apples, Ad Tickets), ShopPopup (IAP shop), Tutorial, UpgradePanel, BoostBar,
+                       OfferPopup, PremiumPopup, FoxHUD,
                        AdOverlay, UnlockBanner, SettingsPopup, InputJoystick…
     Decor/             Ambient (wind, spinners, clouds, water), Wanderer (animals), Butterflies, Birds, PathMover
   Scripts/Editor/      builders (namespace JuiceKing.EditorTools)
@@ -105,7 +107,7 @@ All pads are `Zone` subclasses and work by cheap distance tests (no physics trig
 - **Delivery (world 1):**
   - `DeliveryManager` schedules trucks, generates orders (`DeliveryOrders`) and pays out.
   - It saves the active order in `SaveData.delivery`.
-  - Trucks follow waypoint paths set up by `DeliveryBay`.
+  - Trucks follow waypoint paths set up by `DeliveryBay`. `DeliveryTruck.Arrive(path, fill, park.rotation)` lines the truck up with the bay over the last 3.5 m and settles it square once parked. Doors: `door`/`doorOpenEuler` plus an optional `door2`; `doorOvershoot = false` for doors that fold back flat (Berry Blast rear barn doors swing ±262°).
   - Loading happens on `DeliveryZone`.
   - Order info is shown on the 3D `TruckBoard` at the bay and in `DeliveryPopup`, opened by the parcel button (`DeliveryHUD`).
 - **Product lines.** `ProductLine` (Juice, Cake) drives `Counter.line`, `CustomerManager.line` and `DeliveryOrder.line`. Item types: slices 0–19, juices 20–39, money 40, batter 60–79, cakes 80–99 (`ItemTypes.Product/IsProduct/IsSellable`). `GameManager.Orderable(line)` lists what customers may order: juice needs juicer + field, cake needs cake mixer + oven + field.
@@ -114,6 +116,12 @@ All pads are `Zone` subclasses and work by cheap distance tests (no physics trig
 - **Delivery desks.** A scene may have several `DeliveryManager`s (`slot` 0/1 → `SaveData.delivery` / `delivery2`). `DeliveryManager.Focus()` picks the desk the HUD popup shows. When a bay has a `DeliveryBox`, goods fill the box and the box is loaded aboard at the end (world 2); otherwise they fly into the truck (world 1).
 - **Fox raids (world 2).** `FoxRaid` schedules raids (`SaveData.foxNext`), scripts `FoxActor`, damages a `FruitField` (`SetDamaged` → `FruitNode.Damage/Restore`) and keeps regrowth timers in `foxKinds`/`foxTimers`. The first raid is a cutscene through `ExpansionIntro.BeginCutscene/Caption/EndCutscene`. Restore: `FoxRestoreZone` pad or `FoxHUD` → `PremiumPopup` (apples or ad).
 - **Golden Apples.** `SaveData.goldenApples` (default = welcome gift, so old saves get it), `GameManager.AddApples/TrySpendApples/ApplesChanged`, effects in `AppleFx`, counter in `HUD`. Costs live in `Economy`.
+- **Shop (IAP).**
+  - Products are data: `IapCatalog.Products` (id, kind Apples/Tickets/RemoveAds, title, amount, bonus %, fallback price, badge). Ids are store ids: never rename a shipped one.
+  - `Iap` is the purchase entry point (`Purchase`, `Restore`, `Deliver`, `PriceText`), with `IIapProvider` for the real store. No provider = simulated in the Editor and development builds only.
+  - Goods: apples via `AddApples`, Ad Tickets in `SaveData.adTickets` (`GameManager.AddTickets/TrySpendTicket/TicketsChanged`), Remove Ads in `SaveData.noAds` (`SetNoAds`).
+  - `Ads.ShowRewarded` spends a ticket instead of playing the video when the player has one (`Ads.UseTickets`). Forced ads must check `Ads.ForcedAdsAllowed`; rewarded ads ignore Remove Ads.
+  - `ShopPopup` (own nested canvas) is opened by the HUD counters (`ShopSection` picks the scroll target). The builder makes one card per catalog product; the runtime fills texts, prices, badges and the OWNED state.
 - **Tutorial.**
   - Scripted steps 0–5, then free-play guidance: the next unlock, "Upgrade ready", then "Max every upgrade…".
   - World 2 adds a first-cake guide (`Tutorial.firstCakeMixer/firstOven/cakeCounter`) and a fox-damage hint.
@@ -129,7 +137,9 @@ All pads are `Zone` subclasses and work by cheap distance tests (no physics trig
   surfaces (ground slabs, water) whose corners lie past the fog end, and washes the whole ground out in the Game view
   (the Scene view usually has fog off, so it looks fine there).
 - **Vertex colours are not converted to linear space** (the project is Linear). Pass `color.linear` when a colour baked into a mesh must match a material colour, as `StripedCanopy` and `SwimRingMesh` do.
-- **See-through.** `CameraFollow` sets the global `_JKOccluder` (player chest, w = 1). Materials with `_SEE_THROUGH` dither out in front of the player. `SeeThroughTallDecor` enables it on decor taller than 1.8 m.
+- **See-through.** `CameraFollow` sets the global `_JKOccluder` (player chest; w = strength 0..1). Materials with `_SEE_THROUGH` dither out in front of the player. `SeeThroughTallDecor` enables it on decor taller than 1.8 m. The strength fades to 0 during camera shots (`Peek`), otherwise the sweeping sight line makes decor flicker.
+- **Zoom-aware camera.** While a shot pulls the camera back, `CameraFollow` scales the decor cull distances and the URP shadow distance by the zoom (and restores the pipeline asset's shadow distance on disable), so nothing pops during pans.
+- **`B.Cylinder` is the built-in mesh: radius 1, height 2.** A scale of `d` on X/Z draws `2d` wide (`B.Cyl`, `TubeBetween` take that value as "diameter", so they draw twice as wide as the name says). Keep this in mind for new props.
 
 ### 3.5 Builders (editor code)
 
@@ -144,11 +154,13 @@ All pads are `Zone` subclasses and work by cheap distance tests (no physics trig
 | `JuiceKingBuilder.Env.cs` | world-0 decor: trash bin, pond, windmill, coop, animals, butterflies, clouds |
 | `JuiceKingBuilder.Assets.cs` | fonts, materials, sprites, item prefabs, characters, customer prefabs |
 | `JuiceKingBuilder.UI.cs` / `UIExpansion.cs` | HUD, popups, upgrade panel, delivery button/popup, completion popup, intro overlay |
+| `JuiceKingBuilder.Shop.cs` | IAP shop popup: balances, scroll view, pack cards (apple piles, ticket fans), Remove Ads card |
 | `JuiceKingBuilder.Berry.cs` | world 2 scene: ground, one column per berry (patch, press, cake mixer, oven), pastry case, customers, desks, fox, unlock chain, intro |
-| `JuiceKingBuilder.BerryProps.cs` | berry bushes and patches, `BerryPress`, cake mixer + conveyor, oven + rack, pastry case, delivery desk + box, Berry Blast trucks, fox, cottages, fences, blossom trees, hives, rabbits |
+| `JuiceKingBuilder.BerryProps.cs` | berry bushes and patches, `BerryPress` (berry crusher: hopper heap, spiked rollers, juice tank, pour stream), cake mixer + conveyor, oven + rack, pastry case, delivery desk + box, Berry Blast trucks (rear barn doors), fox, cottages, fences, blossom trees, hives, rabbits |
+| `JuiceKingBuilder.Chainsaw.cs` | the chainsaw (player and farmers): engine baked into one multi-material mesh (`Meshes/ChainsawBody`), stadium bar and chain loop meshes; the chain scrolls through a property block |
 | `JuiceKingBuilder.Polish.cs` | every world, run before `OptimizeScene`: contact shadows (`AutoContacts`), foliage materials, see-through on tall decor, ambient particles, waterfall mesh, striped umbrellas, ProBuilder swim rings |
 | `JuiceKingBuilder.Optimize.cs` | `CombineUnder` mesh merging (per-scene folder `Generated/Meshes/Combined/<Scene>/`) |
-| `Gen/ArtGen*.cs` | every texture and icon, painted with SDFs in `Painter` |
+| `Gen/ArtGen*.cs` | every texture and icon, painted with SDFs in `Painter` (`ArtGen.GenerateShop()` regenerates only the ticket and no-ads icons) |
 
 ---
 
@@ -192,6 +204,7 @@ Each one logs a line when it finishes:
 - `M` adds $500.
 - `F9` resets progress.
 - `F10` opens the world-complete popup.
+- **Settings ▸ DEBUG: SWITCH WORLD** (Editor/dev builds): `GameManager.DebugSwitchWorld(i)` parks the current world's progress under the PlayerPrefs key `juiceking_debug_worlds` and loads world i (restoring its parked progress, or starting it fresh). Currencies, stats and archives are shared; no world is marked complete. Reset Save / F9 clear the parked worlds too.
 
 ---
 
@@ -346,7 +359,7 @@ return "ok";
 - It compiles, and a rebuild logs no `Exception` or `error CS`.
 - Play mode runs in **both** worlds with an empty console (the Unity AI/licensing errors can be ignored).
 - An old save still loads. Test with a world-0 save that has no new fields.
-- UI fits at 1080×1920, a tall phone (1080×2340) and a tablet (1536×2048). Switch with `UnityEditor.PlayModeWindow.SetCustomRenderingResolution(w, h, "name")` and capture at a matching aspect. The canvases use CanvasScaler **Expand**, so the 1080×1920 layout always fits; lay the HUD out for 1080 px width. Top bar: money 16–286, world progress 300–780, settings 941–1059.
+- UI fits at 1080×1920, a tall phone (1080×2340) and a tablet (1536×2048). Switch with `UnityEditor.PlayModeWindow.SetCustomRenderingResolution(w, h, "name")` and capture at a matching aspect. The canvases use CanvasScaler **Expand**, so the 1080×1920 layout always fits; lay the HUD out for 1080 px width. Top bar: money 16–286, world progress 300–696, Golden Apples 708–932 with the Ad Tickets capsule under them (y 132–188), settings 941–1059; the objective plank starts at y 192.
 - Portrait screenshots look right:
   - HUD elements don't overlap;
   - text fits its box;
@@ -360,7 +373,7 @@ return "ok";
 - **Ads are simulated.** `Ads.Provider` is null, so the `AdOverlay` counts down instead. To ship, implement `IRewardedAdProvider` for the chosen network (LevelPlay or Unity Ads). Ask the owner which network first.
 - **Bundle identifier** and signing are not set up for store builds.
 - **Web portals.** The hooks in `Core/Platform.cs` are ready. A landscape HUD pass is still needed for desktop web.
-- **Golden Apples cannot be bought yet.** There is no in-app purchase store; apples come from gifts, deliveries and world entry. An IAP shop would be the next step (ask the owner which store SDK).
+- **Purchases are simulated.** The shop UI, catalog and grant flow exist, but `Iap.Provider` is null. To ship, implement `IIapProvider` on Unity IAP and register the `IapCatalog` ids with Google Play and the App Store (ask the owner first). Interstitials don't exist yet, so Remove Ads currently only sets the flag.
 - **Feel / Nice Vibrations** (in `Assets/Feel`) is imported but not used by the game code yet. On this Mac its `.haptic` samples fail to import (`nice_vibrations_editor_plugin` DllNotFoundException): harmless console noise.
 - **Not play-tested yet:**
   - a truck timing out (it pays shop price for what was loaded);

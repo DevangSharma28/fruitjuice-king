@@ -61,6 +61,8 @@ namespace JuiceKing
                 {
                     var car = carriers[c];
                     if (!car.canCollectLoose) continue;
+                    // Helpers stick to their job: a farmer only picks up its own field's berries/slices.
+                    if (car.pickupFilter != null && !car.pickupFilter(it.type)) continue;
                     Vector3 d = car.transform.position - p;
                     d.y = 0f;
                     float dd = d.sqrMagnitude;

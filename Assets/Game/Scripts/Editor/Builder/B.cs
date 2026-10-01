@@ -169,6 +169,8 @@ namespace JuiceKing.EditorTools
             if (existing != null)
             {
                 EditorUtility.CopySerialized(obj, existing);
+                // CopySerialized does not mark the asset dirty: without this SaveAssets can skip writing it to disk.
+                EditorUtility.SetDirty(existing);
                 AssetDatabase.SaveAssets();
                 return existing;
             }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace JuiceKing
 {
@@ -24,6 +25,13 @@ namespace JuiceKing
         public float smallDecorCull = 44f;
 
         Camera _cam;
+        // Zoom-aware distances: while a shot pulls the camera back, shadows and decor culling reach further so nothing
+        // pops in or out as it glides (and the see-through dither fades out, it only makes sense around the player).
+        readonly float[] _cullDistances = new float[32];
+        float _cullZoom = -1f;
+        UniversalRenderPipelineAsset _urp;
+        float _baseShadowDistance;
+        float _occluder = 1f;
         Vector3 _base;
         Vector3 _lastTarget;
         Vector3 _lead;
@@ -56,12 +64,12 @@ namespace JuiceKing
         {
             if (_cam != null)
             {
-                var d = new float[32];
-                d[BigDecorLayer] = bigDecorCull;
-                d[SmallDecorLayer] = smallDecorCull;
-                _cam.layerCullDistances = d;
                 _cam.layerCullSpherical = true;
+                ApplyZoom(1f);
             }
+            _urp = QualitySettings.renderPipeline as UniversalRenderPipelineAsset;
+            if (_urp == null) _urp = UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline as UniversalRenderPipelineAsset;
+            if (_urp != null) _baseShadowDistance = _urp.shadowDistance;
             _base = target != null ? target.position + offset : transform.position;
             _render = _base;
             if (target != null) _lastTarget = target.position;
@@ -70,14 +78,34 @@ namespace JuiceKing
 
         static readonly int OccluderId = Shader.PropertyToID("_JKOccluder");
 
-        void OnDisable() => Shader.SetGlobalVector(OccluderId, Vector4.zero);
+        void OnDisable()
+        {
+            Shader.SetGlobalVector(OccluderId, Vector4.zero);
+            // The pipeline asset is shared (and saved in the Editor): put its shadow distance back.
+            if (_urp != null && _baseShadowDistance > 0f) _urp.shadowDistance = _baseShadowDistance;
+        }
+
+        /// <summary>Scales decor cull distances and the shadow distance with how far the camera is pulled back.</summary>
+        void ApplyZoom(float zoom)
+        {
+            if (Mathf.Abs(zoom - _cullZoom) < 0.02f) return;
+            _cullZoom = zoom;
+            if (_cam != null)
+            {
+                _cullDistances[BigDecorLayer] = bigDecorCull * zoom;
+                _cullDistances[SmallDecorLayer] = smallDecorCull * zoom;
+                _cam.layerCullDistances = _cullDistances;
+            }
+            if (_urp != null && _baseShadowDistance > 0f) _urp.shadowDistance = _baseShadowDistance * zoom;
+        }
 
         void LateUpdate()
         {
             if (target == null) return;
             // Tall decor between the camera and the player dithers out around them (JuiceKing/Stylized, _SEE_THROUGH).
             var tp = target.position;
-            Shader.SetGlobalVector(OccluderId, new Vector4(tp.x, tp.y + 1f, tp.z, 1f));
+            _occluder = Mathf.MoveTowards(_occluder, _shot != null ? 0f : 1f, Time.unscaledDeltaTime * 3f);
+            Shader.SetGlobalVector(OccluderId, new Vector4(tp.x, tp.y + 1f, tp.z, _occluder));
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
 
@@ -108,6 +136,9 @@ namespace JuiceKing
 
             Vector3 pos = UpdateShot(_base);
             _render = pos;
+            // 1 at the normal follow height, 2.3 at the intro's wide opening shot.
+            float zoom = offset.y > 0.01f ? Mathf.Max(1f, (pos.y - tp.y) / offset.y) : 1f;
+            ApplyZoom(zoom);
             transform.SetPositionAndRotation(pos + shake, Quaternion.LookRotation(-offset.normalized, Vector3.up));
         }
 

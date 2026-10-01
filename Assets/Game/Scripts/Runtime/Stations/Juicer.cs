@@ -90,7 +90,7 @@ namespace JuiceKing
             int need = Balance.SlicesPerJuice[(int)kind];
             var col = Balance.JuiceColors[(int)kind];
 
-            if (!_working && outputPile.HasSpace && inputPile.CountOf(Accepts) >= need)
+            if (!_working && outputPile.HasSpace && inputPile.CountReady(Accepts) >= need)
             {
                 for (int i = 0; i < need; i++)
                 {

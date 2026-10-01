@@ -24,6 +24,7 @@ namespace JuiceKing.EditorTools
             WorldTextures();
             TropicalArt();
             BerryArt();
+            ShopIcons();
         }
 
         // ---------------------------------------------------------------- shape helpers

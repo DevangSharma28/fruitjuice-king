@@ -228,7 +228,10 @@ namespace JuiceKing.EditorTools
 
         // ================================================================== berry press
 
-        /// <summary>Advanced juicer: tumbling glass drum, piston press, pulsing juice pipe, gauge and light ring.</summary>
+        /// <summary>
+        /// Berry crusher: a funnel heaped with berries feeds two spiked rollers that spin against each other; juice runs
+        /// through a glass pipe into a tank that fills with the batch, and the spout pours a stream into every bottle.
+        /// </summary>
         static BerryPress BuildBerryPress(int f, Vector3 pos)
         {
             var root = B.Node("Press_" + FruitKey[f], _stations, pos);
@@ -237,69 +240,100 @@ namespace JuiceKing.EditorTools
             var bt = body.transform;
             var shell = _mFruitBody[f];
             var accent = MatLib.Lit("PressAccent_" + FruitKey[f], Color.Lerp(Balance.FruitColors[f], Color.white, 0.55f), 0.45f);
+            const float deckZ = 0.12f;
 
             RB("Plinth", bt, _mPanelDark, new Vector3(0f, 0.12f, 0f), new Vector3(2f, 0.24f, 1.8f), 0.22f);
-            RB("Trim", bt, _mChrome, new Vector3(0f, 0.26f, 0f), new Vector3(2.04f, 0.05f, 1.84f), 0.24f, false);
-            RB("Cabinet", bt, shell, new Vector3(0f, 0.78f, 0f), new Vector3(1.7f, 1f, 1.45f), 0.34f);
-            RB("Band", bt, accent, new Vector3(0f, 1.2f, 0f), new Vector3(1.76f, 0.13f, 1.5f), 0.36f, false);
-            RB("Lip", bt, _mChrome, new Vector3(0f, 1.3f, 0f), new Vector3(1.5f, 0.06f, 1.25f), 0.3f, false);
+            RB("Trim", bt, _mSteel, new Vector3(0f, 0.26f, 0f), new Vector3(2.04f, 0.05f, 1.84f), 0.24f, false);
+            RB("Cabinet", bt, shell, new Vector3(0f, 0.67f, 0f), new Vector3(1.7f, 0.86f, 1.45f), 0.3f);
+            RB("Band", bt, accent, new Vector3(0f, 1.06f, 0f), new Vector3(1.76f, 0.12f, 1.5f), 0.32f, false);
+            RB("Deck", bt, _mPanelDark, new Vector3(0f, 1.15f, 0.02f), new Vector3(1.5f, 0.06f, 1.25f), 0.2f, false);
 
-            // Front panel: gauge, light ring, berry badge and a status LED.
-            var panel = B.Node("Panel", bt, new Vector3(0f, 0.72f, -0.74f)).transform;
-            RB("Face", panel, _mPanelDark, Vector3.zero, new Vector3(1.24f, 0.62f, 0.07f), 0.05f, false);
-            B.MeshObj("Gauge", panel, _disc, new[] { _mWhite, _mChrome }, new Vector3(-0.32f, 0.04f, -0.04f), new Vector3(0.38f, 0.03f, 0.38f), new Vector3(-90f, 0f, 0f), false);
-            var needle = B.Node("Needle", panel, new Vector3(-0.32f, 0.04f, -0.075f)).transform;
-            B.Box("Hand", needle, _mRed, new Vector3(0f, 0.07f, 0f), new Vector3(0.025f, 0.14f, 0.01f), null, false);
-            var ring = new List<Renderer>();
-            for (int i = 0; i < 8; i++)
+            // Front panel: berry badge, a row of progress lights and the status LED.
+            var panel = B.Node("Panel", bt, new Vector3(0f, 0.66f, -0.74f)).transform;
+            RB("Face", panel, _mPanelDark, Vector3.zero, new Vector3(1.24f, 0.5f, 0.07f), 0.06f, false);
+            B.MeshObj("BadgeBack", panel, _disc, new[] { _mWhite, _mWhite }, new Vector3(-0.38f, 0f, -0.04f), new Vector3(0.34f, 0.02f, 0.34f), new Vector3(-90f, 0f, 0f), false);
+            B.Sprite("Badge", panel, _sFruit[f], new Vector3(-0.38f, 0f, -0.06f), SpriteScale(_sFruit[f], 0.26f), false, 2).transform.localRotation = Quaternion.identity;
+            var lights = new List<Renderer>();
+            for (int i = 0; i < 6; i++)
+                lights.Add(B.MeshObj("Light", panel, LowSphere(), _bRingOff, new Vector3(-0.08f + i * 0.1f, 0.08f, -0.05f), new Vector3(0.075f, 0.075f, 0.04f), null, false).GetComponent<Renderer>());
+            var led = B.MeshObj("Led", panel, LowSphere(), _mLedOff, new Vector3(0.42f, -0.12f, -0.05f), new Vector3(0.09f, 0.09f, 0.05f), null, false);
+
+            // Crusher: two spiked rollers between side cheeks, spinning against each other; pulp collects under the nip.
+            foreach (var sx in new[] { -0.6f, 0.6f })
+                RB("Cheek", bt, shell, new Vector3(sx, 1.48f, deckZ), new Vector3(0.12f, 0.6f, 0.86f), 0.06f);
+            var crusher = B.Node("Crusher", bt, new Vector3(0f, 1.44f, deckZ)).transform;
+            var rollers = new Transform[2];
+            for (int r = 0; r < 2; r++)
             {
-                float a = i / 8f * Mathf.PI * 2f + Mathf.PI * 0.5f;
-                ring.Add(B.MeshObj("RingLight", panel, LowSphere(), _bRingOff, new Vector3(0.28f + Mathf.Cos(a) * 0.19f, 0.04f + Mathf.Sin(a) * 0.19f, -0.05f), Vector3.one * 0.07f, null, false).GetComponent<Renderer>());
+                // Dark drums with bright spikes in the berry colour, so the spin reads from the gameplay camera.
+                var roller = B.Node(r == 0 ? "RollerFront" : "RollerBack", crusher, new Vector3(0f, 0f, r == 0 ? -0.2f : 0.2f)).transform;
+                B.MeshObj("Drum", roller, B.Cylinder, _mPanelDark, Vector3.zero, new Vector3(0.13f, 0.53f, 0.13f), new Vector3(0f, 0f, 90f), false);
+                for (int k = 0; k < 6; k++)
+                {
+                    float a = k * 60f + r * 30f;
+                    var q = Quaternion.Euler(a, 0f, 0f);
+                    B.Box("Ridge", roller, shell, q * new Vector3(0f, 0.14f, 0f), new Vector3(1f, 0.08f, 0.07f), new Vector3(a, 0f, 0f), false);
+                }
+                foreach (var ex in new[] { -0.5f, 0.5f })
+                    B.MeshObj("Hub", roller, B.Cylinder, _mSteel, new Vector3(ex, 0f, 0f), new Vector3(0.16f, 0.025f, 0.16f), new Vector3(0f, 0f, 90f), false);
+                rollers[r] = roller;
             }
-            B.Sprite("Badge", panel, _sFruit[f], new Vector3(0.28f, 0.04f, -0.06f), SpriteScale(_sFruit[f], 0.26f), false, 2).transform.localRotation = Quaternion.identity;
-            var led = B.MeshObj("Led", panel, LowSphere(), _mLedOff, new Vector3(0.52f, 0.22f, -0.05f), new Vector3(0.09f, 0.09f, 0.05f), null, false);
+            var pulp = B.MeshObj("Pulp", bt, _disc, new[] { _mJuice[f], _mJuice[f] }, new Vector3(0f, 1.18f, deckZ), new Vector3(0.95f, 0.03f, 0.55f), null, false).transform;
+            var nip = B.Node("Nip", bt, new Vector3(0f, 1.5f, deckZ)).transform;
 
-            // Glass drum on chrome arms: berries tumble inside while pressing.
-            foreach (var sx in new[] { -0.55f, 0.55f })
-                RB("Arm", bt, _mChrome, new Vector3(sx, 1.5f, 0.05f), new Vector3(0.1f, 0.42f, 0.14f), 0.04f, false);
-            B.MeshObj("DrumGlass", bt, B.Cylinder, _mGlass, new Vector3(0f, 1.78f, 0.05f), new Vector3(0.95f, 0.6f, 0.95f), new Vector3(0f, 0f, 90f), false);
-            foreach (var sx in new[] { -0.62f, 0.62f })
-                B.MeshObj("DrumCap", bt, _disc, new[] { _mChrome, _mChrome }, new Vector3(sx, 1.78f, 0.05f), new Vector3(1f, 0.05f, 1f), new Vector3(0f, 0f, 90f), false);
-            var drum = B.Node("Drum", bt, new Vector3(0f, 1.78f, 0.05f)).transform;
-            var drumBerries = new List<Transform>();
-            for (int i = 0; i < 8; i++)
+            // Hopper heaped with berries (the heap shows how much is queued).
+            B.MeshObj("Hopper", bt, _funnel, shell, new Vector3(0f, 1.76f, deckZ), new Vector3(0.52f, 0.44f, 0.46f));
+            var heap = B.Node("Heap", bt, new Vector3(0f, 2.02f, deckZ)).transform;
+            var heapBerries = new List<Transform>();
+            var spots = new List<Vector3>();
+            for (int i = 0; i < 6; i++)
             {
-                float a = i / 8f * Mathf.PI * 2f;
-                var holder = B.Node("B", drum, new Vector3(-0.42f + (i % 4) * 0.28f, Mathf.Cos(a) * 0.22f, Mathf.Sin(a) * 0.22f)).transform;
-                Berry(holder, f, Vector3.zero, f == 7 ? 0.2f : 0.16f, i * 45f);
-                drumBerries.Add(holder);
+                float a = i / 6f * Mathf.PI * 2f + 0.3f;
+                spots.Add(new Vector3(Mathf.Cos(a) * 0.27f, 0.02f, Mathf.Sin(a) * 0.23f));
             }
-            B.MeshObj("Funnel", bt, _funnel, shell, new Vector3(0f, 2.12f, 0.05f), new Vector3(0.6f, 0.4f, 0.6f));
-            var intake = B.Node("Intake", bt, new Vector3(0f, 2.45f, 0.05f));
+            for (int i = 0; i < 3; i++)
+            {
+                float a = i / 3f * Mathf.PI * 2f + 1.1f;
+                spots.Add(new Vector3(Mathf.Cos(a) * 0.12f, 0.13f, Mathf.Sin(a) * 0.1f));
+            }
+            spots.Add(new Vector3(0f, 0.24f, 0f));
+            for (int i = 0; i < spots.Count; i++)
+            {
+                var holder = B.Node("B", heap, spots[i]).transform;
+                Berry(holder, f, Vector3.zero, f == 7 ? 0.2f : 0.17f, i * 47f);
+                heapBerries.Add(holder);
+            }
+            var intake = B.Node("Intake", bt, new Vector3(0f, 2.5f, deckZ));
 
-            // Press chamber and piston (front right), a glass pipe down to the spout.
-            RB("Chamber", bt, _mChrome, new Vector3(0.52f, 1.52f, -0.5f), new Vector3(0.42f, 0.36f, 0.42f), 0.08f);
-            var piston = B.Node("Piston", bt, new Vector3(0.52f, 2.02f, -0.5f)).transform;
-            B.Cyl("Rod", piston, _mChrome, new Vector3(0f, 0.05f, 0f), 0.1f, 0.5f);
-            B.MeshObj("Head", piston, _disc, new[] { accent, _mChrome }, new Vector3(0f, -0.22f, 0f), new Vector3(0.34f, 0.08f, 0.34f), null, false);
-            var pStart = B.Node("PipeStart", bt, new Vector3(0.52f, 1.32f, -0.72f)).transform;
-            var pEnd = B.Node("PipeEnd", bt, new Vector3(0.08f, 0.98f, -0.94f)).transform;
-            TubeBetween("Pipe", bt, pStart.localPosition, pEnd.localPosition, 0.14f, _mGlass);
+            // Juice tank (front left): fills as the batch is crushed.
+            var tankPos = new Vector3(-0.5f, 1.18f, -0.46f);
+            B.MeshObj("TankBase", bt, _disc, new[] { _mSteel, _mSteel }, tankPos, new Vector3(0.4f, 0.05f, 0.4f), null, false);
+            var liquid = B.Node("Liquid", bt, tankPos + Vector3.up * 0.05f).transform;
+            B.MeshObj("Juice", liquid, B.Cylinder, _mJuice[f], new Vector3(0f, 0.5f, 0f), new Vector3(0.135f, 0.5f, 0.135f), null, false);
+            liquid.localScale = new Vector3(1f, 0.56f, 1f);
+            B.MeshObj("TankGlass", bt, B.Cylinder, _mGlass, tankPos + Vector3.up * 0.34f, new Vector3(0.17f, 0.3f, 0.17f), null, false);
+            B.MeshObj("TankCap", bt, _disc, new[] { accent, _mSteel }, tankPos + Vector3.up * 0.64f, new Vector3(0.4f, 0.06f, 0.4f), null, false);
+
+            // Glass pipe from the crusher into the tank (juice blobs pulse along it), steel pipe from the tank to the spout.
+            var pStart = B.Node("PipeStart", bt, new Vector3(-0.22f, 1.24f, -0.2f)).transform;
+            var pEnd = B.Node("PipeEnd", bt, tankPos + new Vector3(0.12f, 0.5f, 0.06f)).transform;
+            TubeBetween("Pipe", bt, pStart.localPosition, pEnd.localPosition, 0.06f, _mGlass);
             var blobs = new List<Transform>();
             for (int i = 0; i < 4; i++)
-            {
-                var b = B.MeshObj("Blob", bt, LowSphere(), _mJuice[f], pStart.localPosition, Vector3.one * 0.09f, null, false);
-                blobs.Add(b.transform);
-            }
-            B.MeshObj("SpoutTip", bt, B.Cylinder, _mChrome, new Vector3(0f, 0.95f, -0.96f), new Vector3(0.13f, 0.07f, 0.13f));
+                blobs.Add(B.MeshObj("Blob", bt, LowSphere(), _mJuice[f], pStart.localPosition, Vector3.one * 0.08f, null, false).transform);
+            TubeBetween("Feed", bt, tankPos + new Vector3(0.14f, 0.08f, -0.08f), new Vector3(0f, 1.02f, -0.9f), 0.045f, _mSteel);
+            B.MeshObj("SpoutTip", bt, B.Cylinder, _mSteel, new Vector3(0f, 0.97f, -0.94f), new Vector3(0.08f, 0.07f, 0.08f));
             var spout = B.Node("SpoutPoint", bt, new Vector3(0f, 0.85f, -0.96f));
+            var stream = B.Node("Stream", bt, new Vector3(0f, 0.9f, -0.95f)).transform;
+            B.MeshObj("Pour", stream, B.Cylinder, _mJuice[f], new Vector3(0f, -0.5f, 0f), new Vector3(0.035f, 0.5f, 0.035f), null, false);
+            stream.localScale = new Vector3(1f, 0f, 1f);
 
             // Stainless tray (output) and slatted crate (input), as on the other juicers.
             var tray = B.Node("Tray", t, new Vector3(0f, 0f, -1.62f));
             var trt = tray.transform;
             RB("Top", trt, _mSteel, new Vector3(0f, 0.5f, 0f), new Vector3(1.55f, 0.07f, 1f), 0.1f);
-            B.Box("RailF", trt, _mChrome, new Vector3(0f, 0.56f, -0.48f), new Vector3(1.5f, 0.05f, 0.04f), null, false);
-            B.Box("RailB", trt, _mChrome, new Vector3(0f, 0.56f, 0.48f), new Vector3(1.5f, 0.05f, 0.04f), null, false);
+            B.Box("RailF", trt, _mSteel, new Vector3(0f, 0.56f, -0.48f), new Vector3(1.5f, 0.05f, 0.04f), null, false);
+            B.Box("RailB", trt, _mSteel, new Vector3(0f, 0.56f, 0.48f), new Vector3(1.5f, 0.05f, 0.04f), null, false);
             foreach (var lx in new[] { -0.66f, 0.66f })
             foreach (var lz in new[] { -0.4f, 0.4f })
                 B.Cyl("Leg", trt, _mPanelDark, new Vector3(lx, 0.235f, lz), 0.07f, 0.47f);
@@ -329,12 +363,12 @@ namespace JuiceKing.EditorTools
             inPile.spacing = new Vector2(0.42f, 0.42f);
             inPile.layerHeight = 0.15f;
 
-            // Round berry sign on a post, with a golden crown that bounces on every cup.
-            var sign = B.Node("Sign", t, new Vector3(0.78f, 0f, 0.55f)).transform;
-            B.Cyl("Post", sign, _mChrome, new Vector3(0f, 1.9f, 0.07f), 0.07f, 1.1f);
-            B.MeshObj("Disc", sign, _disc, new[] { _mWhite, shell }, new Vector3(0f, 2.72f, 0f), new Vector3(0.78f, 0.07f, 0.78f), new Vector3(-90f, 0f, 0f));
-            B.Sprite("Icon", sign, _sJuiceIcons[f], new Vector3(0f, 2.72f, -0.085f), SpriteScale(_sJuiceIcons[f], 0.56f), false, 2).transform.localRotation = Quaternion.identity;
-            var crown = B.Node("Crown", sign, new Vector3(0f, 3.16f, 0f)).transform;
+            // Round berry sign on a post at the back corner (clear of the hopper), with a crown that bounces on every bottle.
+            var sign = B.Node("Sign", t, new Vector3(0.86f, 0f, 0.74f)).transform;
+            B.Cyl("Post", sign, _mSteel, new Vector3(0f, 1.9f, 0.07f), 0.07f, 1.1f);
+            B.MeshObj("Disc", sign, _disc, new[] { _mWhite, shell }, new Vector3(0f, 2.72f, 0f), new Vector3(0.74f, 0.07f, 0.74f), new Vector3(-90f, 0f, 0f));
+            B.Sprite("Icon", sign, _sJuiceIcons[f], new Vector3(0f, 2.72f, -0.085f), SpriteScale(_sJuiceIcons[f], 0.52f), false, 2).transform.localRotation = Quaternion.identity;
+            var crown = B.Node("Crown", sign, new Vector3(0f, 3.14f, 0f)).transform;
             B.MeshObj("Crown", crown, _crown, _mGold, Vector3.zero, Vector3.one * 0.3f, null, false);
 
             var col = root.AddComponent<BoxCollider>();
@@ -351,22 +385,26 @@ namespace JuiceKing.EditorTools
             j.intakePoint = intake.transform;
             j.spoutPoint = spout.transform;
             j.body = bt;
+            j.liquid = liquid;
             j.hum = hum;
             j.hopper = ct;
             j.statusLight = led.GetComponent<Renderer>();
             j.ledOn = _mLedOn;
             j.ledOff = _mLedOff;
             j.sign = sign;
-            j.drum = drum;
-            j.drumBerries = drumBerries.ToArray();
-            j.piston = piston;
+            j.crusher = crusher;
+            j.rollers = rollers;
+            j.pulp = pulp;
+            j.nip = nip;
+            j.heap = heap;
+            j.heapBerries = heapBerries.ToArray();
             j.pipeBlobs = blobs.ToArray();
             j.pipeStart = pStart;
             j.pipeEnd = pEnd;
-            j.gaugeNeedle = needle;
-            j.ringLights = ring.ToArray();
-            j.ringOn = _bRingOn;
-            j.ringOff = _bRingOff;
+            j.stream = stream;
+            j.progressLights = lights.ToArray();
+            j.lightOn = _bRingOn;
+            j.lightOff = _bRingOff;
             j.crown = crown;
 
             var dz = MakeZone<DropZone>("InputZone", t, pos + new Vector3(0f, 0f, 3.0f), new Vector2(2.3f, 1.5f), _mPadIn, _sFruit[f]);
@@ -716,8 +754,9 @@ namespace JuiceKing.EditorTools
             var lineMat = MatLib.Lit("BayLine", new Color(1f, 0.95f, 0.85f), 0.1f);
             foreach (var sx in new[] { -1.5f, 1.5f })
                 B.Box("BayLine", t, lineMat, park + new Vector3(sx, 0.05f, 0f), new Vector3(0.14f, 0.02f, 6f), null, false);
-            B.Prop("Survival/barrel", t, park + new Vector3(-7.6f, 0f, 0.4f), 2f, 20f);
-            B.Prop("Survival/box", t, park + new Vector3(-7.9f, 0f, 1.5f), 2.4f, 10f);
+            // Inside the desk yard (x >= 11), clear of the farm fences to the west and of the loading pad to the east.
+            B.Prop("Survival/barrel", t, park + new Vector3(-6.2f, 0f, 0.6f), 2f, 20f);
+            B.Prop("Survival/box", t, park + new Vector3(-6.5f, 0f, 1.6f), 2.4f, 10f);
 
             var bay = go.AddComponent<DeliveryBay>();
             bay.arrivePath = arrive;
@@ -800,19 +839,12 @@ namespace JuiceKing.EditorTools
             RB("Cargo", body, paint, new Vector3(0f, 0.7f + cargoH * 0.5f, zCargo), new Vector3(w + 0.05f, cargoH, cargoLen), 0.2f);
             RB("Stripe", body, trim, new Vector3(0f, 0.92f, zCargo), new Vector3(w + 0.1f, 0.16f, cargoLen - 0.1f), 0.2f, false);
             RB("RoofTrim", body, trim, new Vector3(0f, 0.7f + cargoH + 0.04f, zCargo), new Vector3(w - 0.1f, 0.08f, cargoLen - 0.2f), 0.2f, false);
-            // Cargo door (left side): brand and mural on that side are painted on the door itself, so they swing with it
-            // instead of sitting inside the door's thickness (which z-fought).
-            float doorLen = Mathf.Min(1.8f, cargoLen - 0.5f);
-            float doorZ = zCargo + doorLen * 0.5f;
-            var hinge = B.Node("DoorHinge", body, new Vector3(-w * 0.5f - 0.04f, 0.7f + cargoH * 0.5f, doorZ)).transform;
+            // Brand and mural on both cargo sides.
             foreach (var sx in new[] { -1f, 1f })
             {
-                bool onDoor = sx < 0f;
-                var parentT = onDoor ? hinge : body;
-                float faceX = onDoor ? -0.02f - 0.03f - 0.012f : w * 0.5f + 0.025f + 0.03f;
-                Vector3 Local(float y, float z) => onDoor ? new Vector3(faceX, y - (0.7f + cargoH * 0.5f), z - doorZ) : new Vector3(faceX, y, z);
-                float panelLen = onDoor ? doorLen - 0.25f : cargoLen - 0.3f;
-                var logo = B.Text("Brand", parentT, brand, 3.4f, Color.white, Local(0.7f + cargoH * 0.3f, zCargo));
+                float faceX = sx * (w * 0.5f + 0.025f + 0.03f);
+                float panelLen = cargoLen - 0.3f;
+                var logo = B.Text("Brand", body, brand, 3.4f, Color.white, new Vector3(faceX, 0.7f + cargoH * 0.3f, zCargo));
                 logo.transform.localRotation = Quaternion.Euler(0f, sx > 0 ? -90f : 90f, 0f);
                 logo.rectTransform.sizeDelta = new Vector2(panelLen, 0.5f);
                 logo.enableAutoSizing = true;
@@ -821,14 +853,49 @@ namespace JuiceKing.EditorTools
                 if (mural != null)
                 {
                     float size = Mathf.Min(1.2f, cargoH * 0.5f, panelLen * 0.8f);
-                    var m = B.Sprite("Mural", parentT, mural, Local(0.7f + cargoH * 0.64f, zCargo), SpriteScale(mural, size), false, 2);
+                    var m = B.Sprite("Mural", body, mural, new Vector3(faceX, 0.7f + cargoH * 0.64f, zCargo), SpriteScale(mural, size), false, 2);
                     m.transform.localRotation = Quaternion.Euler(0f, sx > 0 ? -90f : 90f, 0f);
                 }
             }
-            // Tail lights (glow when braking) and exhaust.
+
+            // Rear barn doors (they face the camera at the bay). Each swings round on its outer hinge and folds flat
+            // against its cargo side, so nothing sticks out; behind them a dark hold where the parcel stack grows.
+            float halfW = (w + 0.05f) * 0.5f;
+            float doorBottom = 0.8f, doorH = cargoH - 0.2f, doorY = doorBottom + doorH * 0.5f;
+            float hingeZ = zRear - 0.07f;
+            var hinges = new Transform[2];
+            for (int side = 0; side < 2; side++)
+            {
+                float sx = side == 0 ? -1f : 1f;
+                var h = B.Node(side == 0 ? "DoorHingeL" : "DoorHingeR", body, new Vector3(sx * (halfW + 0.04f), doorY, hingeZ)).transform;
+                float leaf = halfW + 0.04f - 0.015f;
+                float cx = -sx * leaf * 0.5f;
+                RB("Door", h, paint, new Vector3(cx, 0f, 0f), new Vector3(leaf, doorH, 0.06f), 0.05f);
+                RB("DoorFrame", h, trim, new Vector3(cx, 0f, -0.032f), new Vector3(leaf - 0.1f, doorH - 0.1f, 0.012f), 0.04f, false);
+                RB("DoorPanel", h, paint, new Vector3(cx, 0f, -0.04f), new Vector3(leaf - 0.2f, doorH - 0.2f, 0.012f), 0.03f, false);
+                // Lock bar along the meeting edge and two hinge knuckles on the outer edge.
+                B.Box("LockBar", h, _mChrome, new Vector3(-sx * (leaf - 0.08f), 0f, -0.05f), new Vector3(0.05f, doorH * 0.86f, 0.03f), null, false);
+                B.Box("Handle", h, _mDark, new Vector3(-sx * (leaf - 0.16f), -doorH * 0.08f, -0.06f), new Vector3(0.14f, 0.05f, 0.04f), null, false);
+                foreach (var hy in new[] { -doorH * 0.36f, doorH * 0.36f })
+                    B.Box("Knuckle", h, _mChrome, new Vector3(sx * 0.005f, hy, 0f), new Vector3(0.06f, 0.16f, 0.08f), null, false);
+                hinges[side] = h;
+            }
+            if (mural != null)
+            {
+                var m = B.Sprite("RearMural", hinges[0], mural, new Vector3(halfW * 0.5f, doorH * 0.08f, -0.05f), SpriteScale(mural, Mathf.Min(0.95f, doorH * 0.5f)), false, 2);
+                m.transform.localRotation = Quaternion.identity;
+            }
+            var rearLogo = B.Text("RearBrand", hinges[1], brand, 2.4f, Color.white, new Vector3(-halfW * 0.5f, doorH * 0.12f, -0.05f));
+            rearLogo.rectTransform.sizeDelta = new Vector2(halfW - 0.3f, 0.9f);
+            rearLogo.enableAutoSizing = true;
+            rearLogo.fontSizeMin = 1.2f;
+            rearLogo.fontSizeMax = 2.4f;
+            rearLogo.textWrappingMode = TMPro.TextWrappingModes.Normal;
+
+            // Tail lights below the doors (glow when braking) and exhaust.
             var brakes = new List<Renderer>();
             foreach (var sx in new[] { -0.85f, 0.85f })
-                brakes.Add(RB("TailLight", body, _bBrakeOff, new Vector3(sx, 0.9f, zRear - 0.02f), new Vector3(0.28f, 0.2f, 0.06f), 0.05f, false).GetComponent<Renderer>());
+                brakes.Add(RB("TailLight", body, _bBrakeOff, new Vector3(sx, 0.67f, zRear - 0.05f), new Vector3(0.32f, 0.14f, 0.06f), 0.05f, false).GetComponent<Renderer>());
             var exhaust = B.Node("Exhaust", body, new Vector3(0.8f, 0.42f, zRear - 0.12f)).transform;
             B.MeshObj("Pipe", body, B.Cylinder, _mSteel, new Vector3(0.8f, 0.42f, zRear), new Vector3(0.12f, 0.12f, 0.12f), new Vector3(90f, 0f, 0f), false);
 
@@ -847,12 +914,15 @@ namespace JuiceKing.EditorTools
                 wheels.Add(wheel);
             }
 
-            // The door itself, the load inside and the drop point.
-            RB("Door", hinge, trim == _mGold ? _mGold : _mWhite, new Vector3(-0.02f, 0f, -doorLen * 0.5f), new Vector3(0.06f, cargoH - 0.25f, doorLen), 0.05f);
-            B.Box("Hold", body, _mDark, new Vector3(-w * 0.5f + 0.01f, 0.7f + cargoH * 0.5f, doorZ - doorLen * 0.5f), new Vector3(0.02f, cargoH - 0.3f, doorLen - 0.1f), null, false);
-            var fill = B.Node("CargoFill", body, new Vector3(-w * 0.5f + 0.06f, 0.78f, doorZ - doorLen * 0.5f)).transform;
-            B.Box("Parcels", fill, _bCardboard, new Vector3(0.02f, (cargoH - 0.3f) * 0.5f, 0f), new Vector3(0.04f, cargoH - 0.3f, doorLen - 0.2f), null, false);
-            var drop = B.Node("DropPoint", body, new Vector3(-w * 0.5f + 0.5f, 0.7f + cargoH * 0.45f, doorZ - doorLen * 0.5f)).transform;
+            // The hold behind the rear doors, the parcel stack that grows with the order, and the drop point inside.
+            B.Box("Hold", body, _mDark, new Vector3(0f, doorY, zRear - 0.005f), new Vector3(halfW * 2f - 0.12f, doorH - 0.06f, 0.01f), null, false);
+            var fill = B.Node("CargoFill", body, new Vector3(0f, doorBottom + 0.06f, zRear - 0.02f)).transform;
+            float stackH = doorH - 0.2f, stackW = halfW * 2f - 0.34f;
+            B.Box("Parcels", fill, _bCardboard, new Vector3(0f, stackH * 0.5f, 0f), new Vector3(stackW, stackH, 0.016f), null, false);
+            foreach (var ly in new[] { 0.34f, 0.67f })
+                B.Box("Seam", fill, _mDark, new Vector3(0f, stackH * ly, -0.01f), new Vector3(stackW, 0.025f, 0.006f), null, false);
+            B.Box("SeamV", fill, _mDark, new Vector3(0f, stackH * 0.5f, -0.01f), new Vector3(0.025f, stackH, 0.006f), null, false);
+            var drop = B.Node("DropPoint", body, new Vector3(0f, doorY, zRear + 0.35f)).transform;
 
             // Roof mascot.
             float roofY = 0.7f + cargoH + 0.08f;
@@ -894,8 +964,12 @@ namespace JuiceKing.EditorTools
             truck.wheels = wheels.ToArray();
             truck.wheelRadius = 0.42f;
             truck.cargoFill = fill;
-            truck.door = hinge;
-            truck.doorOpenEuler = new Vector3(0f, 105f, 0f);
+            truck.door = hinges[0];
+            truck.doorOpenEuler = new Vector3(0f, 262f, 0f);
+            truck.door2 = hinges[1];
+            truck.door2OpenEuler = new Vector3(0f, -262f, 0f);
+            truck.doorSpeed = 1.1f;
+            truck.doorOvershoot = false;
             truck.dropPoint = drop;
             truck.exhaust = exhaust;
             truck.lights = lights.ToArray();

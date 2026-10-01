@@ -34,6 +34,14 @@ namespace JuiceKing
         public RectTransform applesPanel;
         [Tooltip("Flying apple (disabled template, cloned and pooled).")]
         public Image appleTemplate;
+        [Tooltip("\"+\" beside the apples: opens the shop on the Golden Apple packs.")]
+        public Button applesShopButton;
+
+        [Header("Ad Tickets")]
+        public TextMeshProUGUI ticketsText;
+        public Image ticketsIcon;
+        public RectTransform ticketsPanel;
+        public Button ticketsShopButton;
 
         [Header("Toast")]
         public RectTransform toastPanel;
@@ -83,6 +91,10 @@ namespace JuiceKing
             gm.MoneyChanged += OnMoney;
             gm.ApplesChanged += OnApples;
             SetApples(gm.Apples);
+            gm.TicketsChanged += OnTickets;
+            SetTickets(gm.Tickets);
+            if (applesShopButton != null) applesShopButton.onClick.AddListener(() => OpenShop(ShopSection.Apples));
+            if (ticketsShopButton != null) ticketsShopButton.onClick.AddListener(() => OpenShop(ShopSection.Tickets));
             UnlockManager.ZoneUnlocked += OnUnlocked;
             if (soundButton != null) soundButton.onClick.AddListener(ToggleSound);
             RefreshSound();
@@ -97,6 +109,7 @@ namespace JuiceKing
             {
                 GameManager.I.MoneyChanged -= OnMoney;
                 GameManager.I.ApplesChanged -= OnApples;
+                GameManager.I.TicketsChanged -= OnTickets;
             }
             UnlockManager.ZoneUnlocked -= OnUnlocked;
         }
@@ -112,6 +125,26 @@ namespace JuiceKing
             if (delta > 0 && _applesFlying > 0) return;
             SetApples(value);
             if (applesPanel != null) Tweener.Punch(applesPanel, delta > 0 ? 0.2f : 0.12f, 0.3f, Vector3.one);
+        }
+
+        static void OpenShop(ShopSection section)
+        {
+            if (ShopPopup.I == null) return;
+            Sfx.Play(SfxId.Click, 0.5f);
+            ShopPopup.I.Open(section);
+        }
+
+        void OnTickets(int value, int delta)
+        {
+            SetTickets(value);
+            if (ticketsPanel != null) Tweener.Punch(ticketsPanel, delta > 0 ? 0.2f : 0.12f, 0.3f, Vector3.one);
+            // A ticket was spent on a rewarded ad: say so, since no video played.
+            if (delta < 0) Toast("Ad Ticket used! " + value + " left", ticketsIcon != null ? ticketsIcon.sprite : null, 2f);
+        }
+
+        void SetTickets(int v)
+        {
+            if (ticketsText != null) ticketsText.text = v.ToString("N0");
         }
 
         void SetApples(int v)

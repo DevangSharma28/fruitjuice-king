@@ -185,7 +185,7 @@ namespace JuiceKing
             var path = new List<Vector3>();
             foreach (var p in bay.arrivePath) path.Add(p.position);
             path.Add(bay.park.position);
-            Truck.Arrive(path, 0f);
+            Truck.Arrive(path, 0f, bay.park.rotation);
             if (Board != null)
             {
                 Board.ResetOrder();
