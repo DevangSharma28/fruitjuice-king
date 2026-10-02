@@ -22,6 +22,8 @@ namespace JuiceKing
         public float serveInterval = 0.22f;
 
         readonly List<Customer> _queue = new List<Customer>();
+        readonly List<FruitKind> _kinds = new List<FruitKind>(ItemTypes.FruitCount);
+        float _checkT;
         readonly List<Vector3> _entry = new List<Vector3>();
         readonly List<Vector3> _exit = new List<Vector3>();
         float _spawnT = 0.3f;
@@ -45,7 +47,7 @@ namespace JuiceKing
             var gm = GameManager.I;
 
             // Keep the line full: a new customer every fraction of a second while there is room.
-            if (gm.Orderable(line).Count > 0 && _queue.Count < queueSlots.Length)
+            if (_queue.Count < queueSlots.Length && CollectKinds() > 0)
             {
                 _spawnT -= dt * Boosts.WorkMult;
                 if (_spawnT <= 0f)
@@ -53,6 +55,16 @@ namespace JuiceKing
                     _spawnT = Random.Range(Balance.CustomerSpawnGap.x, Balance.CustomerSpawnGap.y);
                     Spawn();
                 }
+            }
+
+            // A product can stop being available while people queue for it (a fox wrecks its farm): a customer who
+            // has nothing yet changes their mind, one who got part of the order pays for it and goes. The line never
+            // stalls on an order nobody can fill.
+            _checkT -= dt;
+            if (_checkT <= 0f)
+            {
+                _checkT = 0.5f;
+                RerouteUnavailable();
             }
 
             var front = Front;
@@ -79,11 +91,56 @@ namespace JuiceKing
             else _serveT = 0f;
         }
 
+        /// <summary>
+        /// What a new customer may order: everything that can be made right now, plus anything still on the counter
+        /// (stock of a product that just became unavailable still sells). Returns how many.
+        /// </summary>
+        int CollectKinds()
+        {
+            _kinds.Clear();
+            var orderable = GameManager.I.Orderable(line);
+            for (int i = 0; i < orderable.Count; i++) _kinds.Add(orderable[i]);
+            var items = counter.display.items;
+            for (int i = 0; i < items.Count; i++)
+            {
+                var t = items[i].type;
+                if (!t.IsProduct(line)) continue;
+                var k = t.Fruit();
+                if (!_kinds.Contains(k)) _kinds.Add(k);
+            }
+            return _kinds.Count;
+        }
+
+        bool CanFill(FruitKind k)
+        {
+            var orderable = GameManager.I.Orderable(line);
+            for (int i = 0; i < orderable.Count; i++)
+                if (orderable[i] == k) return true;
+            return counter.Has(k);
+        }
+
+        void RerouteUnavailable()
+        {
+            for (int i = _queue.Count - 1; i >= 0; i--)
+            {
+                var c = _queue[i];
+                if (c.state != Customer.State.Queueing && c.state != Customer.State.Entering) continue;
+                if (c.Done || CanFill(c.want)) continue;
+                if (c.got > 0)
+                {
+                    if (i == 0) CompleteSale(c, true);
+                    continue;
+                }
+                if (CollectKinds() > 0) c.ChangeOrder(_kinds[Random.Range(0, _kinds.Count)], c.wantCount);
+                else if (i == 0) CompleteSale(c, false);
+            }
+        }
+
         void Spawn()
         {
             var refs = GameRefs.I;
-            var kinds = GameManager.I.Orderable(line);
-            FruitKind kind = kinds[Random.Range(0, kinds.Count)];
+            if (CollectKinds() == 0) return;
+            FruitKind kind = _kinds[Random.Range(0, _kinds.Count)];
             int max = line == ProductLine.Cake ? Economy.MaxCakeOrder(GameManager.I.data.cakesSold) : Economy.MaxOrder(GameManager.I.data.totalSold);
             int count = Random.Range(1, max + 1);
 
@@ -107,11 +164,13 @@ namespace JuiceKing
             if (c.got > 0)
             {
                 int price = gm.ProductPrice(line, c.want) * c.got;
-                int tip = happy && Random.value < 0.3f ? Random.Range(1, 4) : 0;
+                // Tips scale with the price so they still mean something in the later worlds.
+                int tip = happy && Random.value < 0.3f ? Mathf.Max(1, Mathf.RoundToInt(price * Random.Range(0.05f, 0.15f))) : 0;
                 float mult = Boosts.MoneyMult;
-                int total = Mathf.RoundToInt((price + tip) * mult);
+                int total = Mathf.RoundToInt((price + tip) * Economy.CharmMult * mult);
                 Vector3 from = counter.servePoint.position + Vector3.up * 1.2f;
                 cash.Deposit(total, from);
+                gm.NotifyIncome(total);
                 if (line == ProductLine.Cake) gm.NotifyCakeSold(c.got);
                 else gm.NotifyJuiceSold(c.got);
                 Sfx.Play(SfxId.Cash, 0.32f);

@@ -168,7 +168,7 @@ namespace JuiceKing.EditorTools
             var zBananaField = TUnlock("t_banana_farm", "Banana Plantation", 4500, new Vector3(0f, 0f, 18.6f), _sFruit[5], new[] { bananaField.transform.parent.gameObject },
                 "Creamy banana shakes unlocked", zFarmerBanana, zPapayaMixer, zMangoMore);
             var zBananaMixer = TUnlock("t_banana_mixer", "Banana Blender", 3000, bananaMixer.transform.position, _uMachine, new[] { bananaMixer.gameObject }, "Blend bananas into thick shakes", zBananaField);
-            var zCabana = TUnlock("t_cabana", "Beach Cabana", 1500, cabana.transform.position, _uStar, new[] { cabana }, "Guests love the beach vibes", zBananaMixer);
+            var zCabana = TUnlock("t_cabana", "Beach Cabana", 1500, cabana.transform.position, _uStar, new[] { cabana }, "Charm: customers pay +10%", zBananaMixer);
             var zLoader = TUnlock("t_loader", "Hire Loader", 3500, new Vector3(10.2f, 0f, -8.3f), _uWaiter, new[] { loader }, "The loader fills trucks for you");
             var zFarmerMango = TUnlock("t_farmer_mango", "Mango Farmer", 2500, new Vector3(14.3f, 0f, 2.3f), _uFarmer, new[] { farmerMango }, "Mangoes picked around the clock");
             var zFarmerCoconut = TUnlock("t_farmer_coconut", "Coconut Farmer", 1600, new Vector3(-12.8f, 0f, 1f), _uFarmer, new[] { farmerCoconut }, "Your first tropical farmhand", zFarmerMango);

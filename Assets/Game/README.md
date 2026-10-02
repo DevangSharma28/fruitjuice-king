@@ -48,7 +48,9 @@ Developers: see [`CLAUDE.md`](../../CLAUDE.md) in the project root for architect
 
 **Customers** arrive every 0.35–0.9 s whenever the 7-slot queue has room, so the line stays full. Each order is random: any flavour whose juicer *and* field are open, from 1 up to N cups, where N grows from 1 to 4 as you sell more (`Balance.MaxOrder`). The customer at the front has a patience bar. After 40 s without receiving a cup, they pay for what they got and leave grumpy, so one unmet order never blocks the line. Customers are pooled, not instantiated.
 
-Progress (money, unlocks, upgrades, tutorial step and last-seen time) is saved to PlayerPrefs.
+Progress (money, unlocks, upgrades, tutorial step, last-seen time, cash still lying on the cash piles, boost time) is saved to PlayerPrefs, with a backup copy in the app's data folder that is used if the PlayerPrefs entry is ever unreadable.
+
+**Settings** has Sound, Ambience and Vibration toggles, Restore Purchases, a Privacy link (once a privacy policy URL is configured) and the version number.
 
 ## Rewarded ads and boosts
 
@@ -58,17 +60,13 @@ Once the tutorial reaches its first sale, a column of boost buttons appears on t
 |---|---|---|
 | **2x CASH** | Doubles every sale for 2 minutes | `Balance.CashBoostSeconds`, `CashBoostMult` |
 | **TURBO** | 90 s: player 1.35x faster; juicers, fruit regrowth, helpers and customer arrivals 1.8x faster | `Balance.TurboSeconds`, `TurboMoveMult`, `TurboWorkMult` |
-| **FREE CASH** | A cash bag that grows with progress, on a 2 minute cooldown | `Balance.FreeCash`, `FreeCashCooldown` |
-| **FINISH $X** | Shown when you stand on an unlock pad with no money left and at most half the price remaining. Completes the unlock | `Balance.UnlockAssistCooldown`, `BoostBar.AssistTarget` |
-| **Offline earnings** | "Welcome back" popup when you've hired helpers. Collect, or watch for 2x | `Balance.OfflineRate`, `OfflineMaxSeconds` |
+| **FREE CASH** | A cash bag worth about 1.5 minutes of your measured income, on a 3 minute cooldown | `Economy.FreeCash`, `Balance.FreeCashCooldown` |
+| **FINISH $X** | Shown when you stand on an unlock pad with no money left and only the last stretch (about one Free Cash bag) remaining. Completes the unlock | `Economy.UnlockAssistMax`, `Balance.UnlockAssistCooldown` |
+| **Offline earnings** | "Welcome back" popup when you've hired helpers: a share of your income that grows with helpers hired, up to 30 min / 1 h / 2 h per world. Collect, or watch for 2x. An unclaimed card comes back on the next launch | `Economy.OfflinePerSecond`, `Economy.OfflineMaxSeconds` |
 
-Watching again while a boost is active adds time (capped at 10 minutes).
+Watching again while a boost is active adds time (capped at 10 minutes). Boost time only runs while you play (not under menus or ads) and is saved, so it survives a restart or a world change.
 
-**Ads are simulated.** `Core/Ads.cs` is the single entry point. When no network is plugged in, a test overlay counts down for 3 seconds and then grants the reward. The game pauses meanwhile, and the X button tests the "ad failed" path. To ship real ads:
-
-1. Implement `IRewardedAdProvider` (`IsReady`, `Show(placement, done)`) on top of your SDK (for example LevelPlay or Unity Ads).
-2. At startup, assign it: `Ads.Provider = new MyProvider();`.
-3. For release builds without ads, set `Ads.SimulateWhenNoProvider = false`. This hides the ad buttons because `Ads.IsReady` becomes false.
+**Ads are simulated** in the Editor and development builds. `Core/Ads.cs` is the single entry point. When no network is plugged in, a test overlay counts down for 3 seconds and then grants the reward. The game pauses meanwhile; the X button tests the "ad failed" path before the countdown ends. Release builds without a network hide the ad buttons. Every reward is granted once, only after the ad completed, and saved at once. To ship real ads, implement `IRewardedAdProvider` (and optionally `IInterstitialAdProvider`) and install it in `Core/AppServices.cs` (see `RELEASE_CHECKLIST.md` and `MONETIZATION_NOTES.md` in the project root).
 
 Placement names are the `Ads.Placement*` constants.
 
@@ -168,7 +166,7 @@ Around it: pastel cottages, a bakery with a smoking chimney, blossom trees, a fo
 
 The **Baker** helper serves the cake queue from the ovens; **farmhands** alternate trips between their berry's press and its cake mixer.
 
-**Fox raids** (`FoxRaid`, `FoxActor`). Now and then (every 4–7 minutes, rarer with the **Fox Fence** upgrade) a fox slips out of its den in the woods, runs along the fox lane, pounces into three bushes and escapes with the berries. The patch wilts: it stops producing and customers stop ordering that berry.
+**Fox raids** (`FoxRaid`, `FoxActor`). Now and then (every 4–7 minutes, rarer with the **Fox Fence** upgrade) a fox slips out of its den in the woods, runs along the fox lane, pounces into three bushes and escapes with the berries. A toast and a yip warn you a few seconds before. The fox never wrecks your only open patch. The patch wilts: it stops producing, and customers who wanted that berry switch to something else (juice or cakes already on the counter still sell).
 - It regrows by itself in 5 minutes (faster with **Garden Care**). A glowing pad with a countdown appears on the lane in front of it, and a fox chip with the timer shows on the HUD.
 - Step on the pad (or tap the chip) to **RESTORE** it now for **3 Golden Apples**, or **WATCH AD**.
 - The first raid is a short cutscene ("Uh oh... a sneaky fox!") that ends on this choice. It happens about 50 s after the tutorial.
@@ -183,6 +181,10 @@ The **Baker** helper serves the cake queue from the ovens; **farmhands** alterna
 
 **Upgrades.** 24 upgrades in 6 tabs: FARM (Harvest Speed, Berry Yield, Regrowth, Fox Fence, Garden Care), MIXER (Press Speed, Bonus Cup, Tray Size), BAKERY (Oven Heat, Cooling Rack, Cake Recipe, Pastry Case), DELIVERY (4), PLAYER (3), BUSINESS (Juice Price, Juice Counter, Helper Speed, Helper Carry, Night Shift).
 
+**Decor pads.** The Cozy Patio, Beach Cabana, Flower Gazebo and Picnic Garden each make customers pay +10% in their world ("Charm").
+
+**Completing the Berry Blast** (every pad, every upgrade) shows a **BERRY CAKE EMPIRE!** celebration with a one-time reward of 25 Golden Apples.
+
 ## Golden Apples (premium currency)
 
 Golden Apples are shown next to the settings gear in every world and are kept when you move to a new world. Tap the counter (its green **+**) to open the shop.
@@ -192,6 +194,7 @@ Golden Apples are shown next to the settings gear in every world and are kept wh
 | 5 as a welcome gift (existing saves get them too) | **3** to restore a fox-raided patch at once |
 | 3–5 when entering a new world | **1** to call the next truck now (delivery card) |
 | 1 per Berry Blast delivery, 2 per premium truck | **1 per 12 missing items** to finish a truck order at once |
+| 25 for completing the Berry Blast (once) | Spending from the delivery card needs a second tap (TAP TO CONFIRM) |
 
 Rewards fly up to the counter with a chime; spending sparkles. Numbers live in `Economy` (`StartingApples`, `ApplesRestoreFarm`, `ApplesCallTruck`, `ApplesFinishOrder`). The **WATCH AD** button is the free alternative wherever a restore is offered.
 
@@ -206,11 +209,7 @@ The **+** on the Golden Apple counter opens the shop on its apple packs; the **+
 
 Products, quantities, bonus lines, badges and fallback prices are data in `Core/IapCatalog.cs` (`IapCatalog.Products`); the cards read them at runtime, so retuning needs no rebuild (adding, removing or reordering products does: rebuild the scenes). Product ids (`jk_apples_starter`...) must match the store and must never be renamed once shipped.
 
-**Purchases are simulated.** `Core/Iap.cs` is the single entry point. Without a store provider, a purchase completes after 0.6 s in the Editor and development builds only; release builds show "Store not available" instead of granting anything. To ship real purchases:
-
-1. Implement `IIapProvider` (`IsReady`, `LocalizedPrice(id)`, `Purchase(id, done)`, `Restore(done)`) on top of Unity IAP and register the `IapCatalog` ids with the stores.
-2. At startup, assign it: `Iap.Provider = new MyStore();`. Localized prices replace the fallback prices automatically.
-3. For purchases that complete outside the shop (pending at launch, restores), call `Iap.Deliver(id)`. It returns false while no world is loaded (loading screen): keep the transaction pending and deliver it later.
+**Purchases.** `Core/Iap.cs` is the single entry point. On Android and iOS devices it talks to the stores through Unity IAP 5 (`Core/UnityIapProvider.cs`); in the Editor and development builds a simulated store completes a purchase after 0.6 s. Each store transaction is granted once (its id is kept in the save), saved, and only then confirmed with the store, so nothing is lost or doubled if the app is killed mid-purchase. The shop shows the store's localized prices and its states (connecting, unavailable, cancelled, failed, waiting for approval, owned). Store setup: `RELEASE_CHECKLIST.md`.
 
 Forced ads (interstitials, banners) don't exist yet; when they are added they must check `Ads.ForcedAdsAllowed`.
 

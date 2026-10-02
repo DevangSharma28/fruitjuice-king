@@ -56,12 +56,12 @@ namespace JuiceKing
         }
 
         protected override bool CanStart() =>
-            !_loading && feeder != null && feeder.isActiveAndEnabled && outputPile.HasSpace && feeder.outputPile.CountReady(Accepts) > 0;
+            !_loading && feeder != null && feeder.isActiveAndEnabled && outputPile.HasSpace && feeder.outputPile.CountReady(InputType) > 0;
 
         protected override void Begin()
         {
             // The first tin rides the rest of the conveyor, the door drops open and it slides in.
-            var tin = feeder.outputPile.TakeLast(Accepts);
+            var tin = feeder.outputPile.TakeLast(InputType);
             if (tin == null) return;
             _loading = true;
             tin.inTransit = true;

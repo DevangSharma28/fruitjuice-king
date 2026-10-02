@@ -163,17 +163,33 @@ namespace JuiceKing
             }
         }
 
+        /// <summary>Something can be ordered right now (juice, or cakes at a desk that takes them).</summary>
+        public bool CanOrder
+        {
+            get
+            {
+                var gm = GameManager.I;
+                return gm != null && (gm.OrderableKinds.Count > 0 || (acceptsCakes && gm.OrderableCakes.Count > 0));
+            }
+        }
+
         void SendTruck()
         {
             var gm = GameManager.I;
             var juices = gm.OrderableKinds;
             var cakes = gm.OrderableCakes;
-            if (juices.Count == 0 && (!acceptsCakes || cakes.Count == 0))
+            if (!CanOrder)
             {
                 Save.cooldown = 5f;
                 return;
             }
-            bool first = gm.data.stats.deliveries == 0 || (slot == 1 && !_anyDoneHere);
+            // The previous truck is still driving off: wait for it (the same truck may be needed again).
+            if (Truck != null && Truck.state != DeliveryTruck.State.Hidden)
+            {
+                Save.cooldown = 1f;
+                return;
+            }
+            bool first = gm.data.stats.deliveries == 0 || (slot == 1 && !Save.anyDone);
             // Cake orders once the shop bakes: rarer, smaller, richer.
             // The very first truck is an easy juice order that teaches loading.
             var line = acceptsCakes && cakes.Count > 0 && (juices.Count == 0 || (!first && UnityEngine.Random.value < 0.4f)) ? ProductLine.Cake : ProductLine.Juice;
@@ -209,8 +225,6 @@ namespace JuiceKing
                 HUD.I.Toast("Truck incoming: " + Order.qty + " " + Order.Name + "!", Icon(Order));
             Changed?.Invoke();
         }
-
-        bool _anyDoneHere;
 
         void OnArrived()
         {
@@ -257,20 +271,26 @@ namespace JuiceKing
         /// <summary>Premium: bring the next truck right now.</summary>
         public bool CallTruckNow()
         {
-            if (Order != null || !Unlocked) return false;
+            if (Order != null || !Unlocked || !CanOrder) return false;
             if (!GameManager.I.TrySpendApples(Economy.ApplesCallTruck)) return false;
+            Analytics.Log(Analytics.ApplesSpent, "amount", Economy.ApplesCallTruck, "what", "truck_call");
             Save.cooldown = 0f;
             AppleFx.Spend(bay != null ? bay.park.position + Vector3.up * 2f : transform.position);
             return true;
         }
 
-        public int FinishCost => Order != null ? Economy.ApplesFinishOrder(Order.Remaining) : 0;
+        /// <summary>Items still missing that are not already on their way in.</summary>
+        public int Missing => Order != null ? Mathf.Max(0, Order.Remaining - InFlight) : 0;
+
+        public int FinishCost => Missing > 0 ? Economy.ApplesFinishOrder(Missing) : 0;
 
         /// <summary>Premium: fill what is missing at once (the box / truck fills with a flourish).</summary>
         public bool FinishNow()
         {
-            if (!Loading || Order.Done) return false;
-            if (!GameManager.I.TrySpendApples(FinishCost)) return false;
+            if (!Loading || Order.Done || Missing <= 0) return false;
+            int cost = FinishCost;
+            if (!GameManager.I.TrySpendApples(cost)) return false;
+            Analytics.Log(Analytics.ApplesSpent, "amount", cost, "what", "truck_finish");
             var order = Order;
             order.delivered = order.qty;
             Save.delivered = order.qty;
@@ -286,6 +306,15 @@ namespace JuiceKing
 
         // ---------------------------------------------------------------- finish
 
+        /// <summary>The order is settled: the save no longer holds it, so a restart during the send-off can never pay twice.</summary>
+        void CloseOrderInSave()
+        {
+            var s = Save;
+            s.active = false;
+            s.waited = 0f;
+            s.cooldown = Economy.TruckInterval;
+        }
+
         void Complete()
         {
             _completing = true;
@@ -294,8 +323,19 @@ namespace JuiceKing
             var gm = GameManager.I;
             gm.data.stats.deliveries++;
             gm.data.stats.deliveryEarned += pay;
-            _anyDoneHere = true;
+            Save.anyDone = true;
             Board?.ShowDone();
+            // Premium trucks tip Golden Apples (the Berry Blast gives one for every delivery).
+            int apples = order.truck == TruckKind.Premium ? 2 : Economy.World >= 2 ? 1 : 0;
+
+            // Settle first, celebrate after: the money and apples are granted and saved at once.
+            CloseOrderInSave();
+            gm.AddMoney(pay);
+            gm.NotifyIncome(pay);
+            if (apples > 0) gm.AddApples(apples);
+            gm.Save();
+            Analytics.Log(Analytics.DeliveryComplete, "truck", order.truck.ToString(), "line", order.line.ToString(), "reward", pay);
+            Haptics.Play(HapticKind.Success);
 
             Action payout = () =>
             {
@@ -310,20 +350,20 @@ namespace JuiceKing
                 Tweener.Delay(0.6f, () =>
                 {
                     if (this == null) return;
-                    gm.AddMoney(pay);
                     Sfx.Play(SfxId.BigCash, 0.7f);
                     Fx.Coins(at, 24);
                     FloatingText.Show("+$" + Economy.Money(pay), at, new Color(0.5f, 1f, 0.5f), 1.4f, 1.6f, 1.4f);
                     if (HUD.I != null) HUD.I.FlyCoins(at, 16);
-                    // Premium trucks tip a Golden Apple (the Berry Blast gives one for every delivery).
-                    int apples = order.truck == TruckKind.Premium ? 2 : Economy.World >= 2 ? 1 : 0;
-                    if (apples > 0) AppleFx.Reward(at, apples);
+                    // The apples were granted above: this is only their flight to the counter.
+                    if (apples > 0) AppleFx.Show(at, apples);
                 });
                 Tweener.Delay(1.7f, () =>
                 {
                     if (this == null) return;
                     SendAway();
                     Completed?.Invoke(order);
+                    // A natural break: the only moment a forced ad may show around deliveries (paced, never after Remove Ads).
+                    Tweener.Delay(1.2f, () => Ads.TryShowInterstitial(Ads.InterstitialDeliveryDone));
                 });
             };
 
@@ -337,10 +377,17 @@ namespace JuiceKing
             _completing = true;
             var order = Order;
             long pay = (long)order.delivered * GameManager.I.ProductPrice(order.line, order.kind);
-            if (pay > 0) GameManager.I.AddMoney(pay);
+            CloseOrderInSave();
+            if (pay > 0)
+            {
+                GameManager.I.AddMoney(pay);
+                GameManager.I.NotifyIncome(pay);
+            }
+            GameManager.I.Save();
+            Analytics.Log(Analytics.DeliveryExpired, "delivered", order.delivered, "qty", order.qty);
             if (HUD.I != null) HUD.I.Toast(order.client + " couldn't wait any longer" + (pay > 0 ? "  +$" + Economy.Money(pay) : ""), Icon(order));
             Sfx.Play(SfxId.Error, 0.4f, 0.8f);
-            if (Box != null && order.delivered > 0) Box.CloseAndLoad(Truck, () => { if (this != null) SendAway(); });
+            if (Box != null && order.delivered > 0) Box.CloseAndLoad(Truck, () => { if (this != null) SendAway(); }, true);
             else
             {
                 if (Box != null) Box.Vanish();
@@ -365,8 +412,8 @@ namespace JuiceKing
 
         void OnGone()
         {
-            _completing = false;
-            if (Order == null) Truck = null;
+            // Only forget the truck once it is really gone (a new truck may already be on its way in).
+            if (Order == null && Truck != null && Truck.state == DeliveryTruck.State.Hidden) Truck = null;
             Changed?.Invoke();
         }
 

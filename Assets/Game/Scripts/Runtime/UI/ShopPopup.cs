@@ -60,6 +60,8 @@ namespace JuiceKing
         int _scrollFrames;
         ShopSection _scrollSection;
         int _statusSerial;
+        float _storeCheckT;
+        bool _wasReady;
 
         public bool IsOpen => _open;
 
@@ -82,11 +84,15 @@ namespace JuiceKing
                 gm.TicketsChanged += OnTickets;
             }
             if (gainText != null) gainText.gameObject.SetActive(false);
+            Iap.Purchased += OnPurchased;
+            Iap.Deferred += OnDeferred;
             gameObject.SetActive(false);
         }
 
         void OnDestroy()
         {
+            Iap.Purchased -= OnPurchased;
+            Iap.Deferred -= OnDeferred;
             if (GameManager.I != null)
             {
                 GameManager.I.ApplesChanged -= OnApples;
@@ -95,7 +101,7 @@ namespace JuiceKing
             if (_open)
             {
                 Platform.Resume("shop");
-                InputJoystick.Blocked = false;
+                InputJoystick.Block("shop", false);
             }
         }
 
@@ -103,10 +109,12 @@ namespace JuiceKing
         {
             if (_open) return;
             _open = true;
+            if (Iap.Provider != null && !Iap.IsReady) Iap.Provider.Reconnect();
+            _wasReady = Iap.IsReady;
             Refresh();
-            SetStatus(Iap.IsReady ? "" : "Store not available right now.");
+            SetStatus(StoreStatus(), true);
             Platform.Pause("shop");
-            InputJoystick.Blocked = true;
+            InputJoystick.Block("shop", true);
             gameObject.SetActive(true);
             Tweener.Scale(window, Vector3.one * 0.55f, Vector3.one, 0.38f, Ease.OutBack);
             if (dim != null)
@@ -120,9 +128,25 @@ namespace JuiceKing
             Sfx.Play(SfxId.Whoosh, 0.3f, 1.2f);
         }
 
+        /// <summary>What the status line says about the store itself (empty when it is ready).</summary>
+        static string StoreStatus() =>
+            Iap.IsReady ? "" : Iap.IsInitializing ? "Connecting to the store..." : "Store not available right now. Check your connection.";
+
         void LateUpdate()
         {
             if (_scrollFrames > 0 && --_scrollFrames == 0) ScrollTo(_scrollSection, true);
+            if (!_open) return;
+            // The store may finish connecting while the shop is open: prices and buttons come alive then.
+            _storeCheckT -= Time.unscaledDeltaTime;
+            if (_storeCheckT > 0f) return;
+            _storeCheckT = 0.5f;
+            bool ready = Iap.IsReady;
+            if (ready != _wasReady)
+            {
+                _wasReady = ready;
+                Refresh();
+                SetStatus(StoreStatus(), true);
+            }
         }
 
         public void Close()
@@ -130,7 +154,7 @@ namespace JuiceKing
             if (!_open) return;
             _open = false;
             Platform.Resume("shop");
-            InputJoystick.Blocked = false;
+            InputJoystick.Block("shop", false);
             Sfx.Play(SfxId.Click, 0.5f);
             Tweener.Scale(window, window.localScale, Vector3.one * 0.6f, 0.16f, Ease.InQuad, () =>
             {
@@ -166,6 +190,7 @@ namespace JuiceKing
                 card.root.gameObject.SetActive(p != null);
                 if (p == null) continue;
                 bool owned = Iap.Owns(p);
+                bool available = Iap.IsAvailable(p);
                 if (card.titleText != null) card.titleText.text = p.title;
                 if (card.amountText != null) card.amountText.text = p.kind == IapKind.RemoveAds ? "" : "x" + p.amount.ToString("N0");
                 if (card.bonusText != null)
@@ -173,8 +198,9 @@ namespace JuiceKing
                     card.bonusText.gameObject.SetActive(p.bonusPercent > 0);
                     card.bonusText.text = "+" + p.bonusPercent + "% BONUS";
                 }
-                card.priceText.text = owned ? "OWNED" : Iap.PriceText(p);
-                card.button.interactable = !owned && !busy;
+                // Prices always come from the store (localized); "..." while it is still connecting.
+                card.priceText.text = owned ? "OWNED" : available ? Iap.PriceText(p) : Iap.IsInitializing ? "..." : "N/A";
+                card.button.interactable = !owned && !busy && available;
                 bool featured = p.badge != IapBadge.None && !owned;
                 if (card.highlights != null)
                     foreach (var h in card.highlights)
@@ -230,19 +256,60 @@ namespace JuiceKing
             }
 
             Sfx.Play(SfxId.Click, 0.5f);
+            Haptics.Play(HapticKind.Selection);
             card.priceText.text = "...";
             foreach (var c in cards) c.button.interactable = false;
-            Iap.Purchase(p.id, ok =>
+            SetStatus("Opening the store...", true);
+            Iap.Purchase(p.id, result =>
             {
                 if (this == null) return;
                 Refresh();
-                if (ok) Celebrate(card, p);
-                else
+                switch (result)
                 {
-                    Sfx.Play(SfxId.Error, 0.35f);
-                    SetStatus("Purchase not completed.");
+                    case IapResult.Success:
+                        // Celebrated by OnPurchased (it also covers restores and late deliveries).
+                        break;
+                    case IapResult.AlreadyOwned:
+                        SetStatus(p.kind == IapKind.RemoveAds ? "You already own Remove Ads." : "This purchase was already delivered.");
+                        break;
+                    case IapResult.Cancelled:
+                        SetStatus("Purchase cancelled.");
+                        break;
+                    case IapResult.Deferred:
+                        SetStatus("Waiting for approval. Your items arrive as soon as it is approved.");
+                        break;
+                    case IapResult.Busy:
+                        SetStatus("Another purchase is still in progress.");
+                        break;
+                    case IapResult.Unavailable:
+                        Sfx.Play(SfxId.Error, 0.35f);
+                        SetStatus("This item is not available right now.");
+                        break;
+                    default:
+                        Sfx.Play(SfxId.Error, 0.35f);
+                        Haptics.Play(HapticKind.Failure);
+                        SetStatus("Purchase failed. Please try again.");
+                        break;
                 }
             });
+        }
+
+        /// <summary>Any grant (shop purchase, restore, a purchase finished after a restart): celebrate on its card.</summary>
+        void OnPurchased(IapProduct p)
+        {
+            if (!_open) return;
+            Refresh();
+            foreach (var c in cards)
+                if (c.productId == p.id)
+                {
+                    Celebrate(c, p);
+                    return;
+                }
+        }
+
+        void OnDeferred(IapProduct p)
+        {
+            if (_open) SetStatus("Waiting for approval. Your items arrive as soon as it is approved.");
         }
 
         void Celebrate(ShopCard card, IapProduct p)
@@ -272,23 +339,25 @@ namespace JuiceKing
         {
             if (Iap.Busy) return;
             Sfx.Play(SfxId.Click, 0.5f);
-            SetStatus("Restoring purchases...");
+            SetStatus("Restoring purchases...", true);
+            bool hadNoAds = GameManager.I != null && GameManager.I.NoAds;
             Iap.Restore(ok =>
             {
                 if (this == null) return;
                 Refresh();
-                SetStatus(ok ? "Purchases restored." : "Could not restore purchases.");
+                bool gotNoAds = GameManager.I != null && GameManager.I.NoAds && !hadNoAds;
+                SetStatus(!ok ? "Could not restore purchases. Check your connection." : gotNoAds ? "Remove Ads restored!" : "Purchases restored. Nothing new to restore.");
             });
         }
 
-        void SetStatus(string msg)
+        void SetStatus(string msg, bool sticky = false)
         {
             if (statusText == null) return;
             statusText.text = msg;
             statusText.gameObject.SetActive(!string.IsNullOrEmpty(msg));
             int serial = ++_statusSerial;
-            if (!string.IsNullOrEmpty(msg))
-                Tweener.Delay(3f, () =>
+            if (!string.IsNullOrEmpty(msg) && !sticky)
+                Tweener.Delay(3.5f, () =>
                 {
                     if (this != null && serial == _statusSerial && statusText != null) statusText.gameObject.SetActive(false);
                 });

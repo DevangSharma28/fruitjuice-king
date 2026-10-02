@@ -154,12 +154,16 @@ namespace JuiceKing
         }
 
         /// <summary>Order complete: fold the flaps, tape it shut, lift it into the truck.</summary>
-        public void CloseAndLoad(DeliveryTruck truck, Action onLoaded)
+        /// <param name="partial">The truck ran out of time: the box keeps its real fill and says so.</param>
+        public void CloseAndLoad(DeliveryTruck truck, Action onLoaded, bool partial = false)
         {
             Open = false;
-            _fill = _fillGoal = 1f;
-            ApplyFill();
-            if (countText != null) countText.text = "SEALED!";
+            if (!partial)
+            {
+                _fill = _fillGoal = 1f;
+                ApplyFill();
+            }
+            if (countText != null) countText.text = partial ? "OUT OF TIME" : "SEALED!";
             // Flaps fold one after another.
             Tweener.Value(transform, 0.55f, t =>
             {

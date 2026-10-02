@@ -16,6 +16,8 @@ namespace JuiceKing
         {
             _down = true;
             Tweener.Scale(transform, transform.localScale, _base * pressedScale, 0.08f, Ease.OutQuad);
+            // A light tick under the finger (rate-limited, off in Settings, device only).
+            Haptics.Play(HapticKind.Selection);
         }
 
         public void OnPointerUp(PointerEventData e) => Release();

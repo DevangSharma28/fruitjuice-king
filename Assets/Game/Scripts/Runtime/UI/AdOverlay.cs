@@ -26,11 +26,13 @@ namespace JuiceKing
         bool _playing;
         bool _granted;
         float _prevTimeScale = 1f;
+        int _shownCount = -1;
 
         void Awake()
         {
             I = this;
-            if (closeButton != null) closeButton.onClick.AddListener(() => Finish(false));
+            // Closing after the countdown keeps the reward that was already earned.
+            if (closeButton != null) closeButton.onClick.AddListener(() => Finish(_granted));
             gameObject.SetActive(false);
         }
 
@@ -40,6 +42,7 @@ namespace JuiceKing
             _t = 0f;
             _granted = false;
             _playing = true;
+            _shownCount = -1;
             gameObject.SetActive(true);
             if (titleText != null) titleText.text = "Rewarded video\n<size=60%>(test ad - plug your ad network into Ads.Provider)</size>";
             _prevTimeScale = Time.timeScale;
@@ -61,7 +64,12 @@ namespace JuiceKing
 
             float left = Mathf.Max(0f, duration - _t);
             if (ring != null) ring.fillAmount = 1f - left / duration;
-            if (countText != null) countText.text = left > 0f ? Mathf.CeilToInt(left).ToString() : "+";
+            int count = left > 0f ? Mathf.CeilToInt(left) : 0;
+            if (countText != null && count != _shownCount)
+            {
+                _shownCount = count;
+                countText.text = count > 0 ? count.ToString() : "+";
+            }
 
             if (!_granted && left <= 0f)
             {

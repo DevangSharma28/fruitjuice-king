@@ -197,7 +197,8 @@ namespace JuiceKing
                     img.gameObject.SetActive(false);
                     _applePool.Push(img);
                     _applesFlying--;
-                    SetApples(landValue);
+                    // The last one lands on the live balance (apples may have been spent or bought meanwhile).
+                    SetApples(_applesFlying == 0 ? GameManager.I.Apples : Mathf.Min(landValue, GameManager.I.Apples));
                     if (applesIcon != null) Tweener.Punch(applesIcon, 0.3f, 0.22f, Vector3.one);
                     Sfx.Play(SfxId.Chime, 0.25f, pitch);
                 }, delay);
@@ -208,6 +209,9 @@ namespace JuiceKing
         {
             if (progressPanel != null) Tweener.Punch(progressPanel, 0.15f, 0.35f, Vector3.one);
         }
+
+        float _progressT;
+        int _progressDone, _progressTotal;
 
         void Update()
         {
@@ -224,8 +228,15 @@ namespace JuiceKing
             if (progressFill != null)
             {
                 // World progress: every unlock pad plus every upgrade level (all of it opens the next world).
-                ExpansionManager.Progress(out int done, out int total);
-                total = Mathf.Max(1, total);
+                // Counted a few times a second (it walks every pad and upgrade), animated every frame.
+                _progressT -= Time.unscaledDeltaTime;
+                if (_progressT <= 0f)
+                {
+                    _progressT = 0.25f;
+                    ExpansionManager.Progress(out _progressDone, out _progressTotal);
+                }
+                int done = _progressDone;
+                int total = Mathf.Max(1, _progressTotal);
                 float goal = done / (float)total;
                 _progressShown = _progressShown < 0f ? goal : Mathf.MoveTowards(_progressShown, goal, Time.deltaTime * 0.6f);
                 progressFill.fillAmount = _progressShown;

@@ -191,44 +191,44 @@ namespace JuiceKing.EditorTools
 
             // ---------------- unlock chain (written last-first: each pad names the pads it reveals)
             var fruitIcon = _sFruit;
-            var zPremium = TUnlock("b_premium", "Premium Contracts", 45000, new Vector3(14.2f, 0f, -12.2f), _uCrown ? _uCrown : _sCrown, new GameObject[0],
+            var zPremium = TUnlock("b_premium", "Premium Contracts", 58500, new Vector3(14.2f, 0f, -12.2f), _uCrown ? _uCrown : _sCrown, new GameObject[0],
                 "Royal trucks bring luxury orders!");
             _tPadSize = 2.3f;
-            var zFarmerCran = TUnlock("b_farmer_cran", "Cranberry Farmer", 22000, farmers[3].transform.position, _uFarmer, new[] { farmers[3] }, "Cranberries picked for you");
+            var zFarmerCran = TUnlock("b_farmer_cran", "Cranberry Farmer", 28500, farmers[3].transform.position, _uFarmer, new[] { farmers[3] }, "Cranberries picked for you");
             _tPadSize = 2.9f;
-            var zCranOven = TUnlock("b_cran_oven", "Cranberry Oven", 28000, ovens[3].transform.position, _sOven, new[] { ovens[3].gameObject },
+            var zCranOven = TUnlock("b_cran_oven", "Cranberry Oven", 36500, ovens[3].transform.position, _sOven, new[] { ovens[3].gameObject },
                 "Cranberry tarts - the priciest treat!", zFarmerCran, zPremium);
-            var zCranMixer = TUnlock("b_cran_mixer", "Cranberry Cake Mixer", 21000, mixers[3].transform.position, _sMixer, new[] { mixers[3].gameObject },
+            var zCranMixer = TUnlock("b_cran_mixer", "Cranberry Cake Mixer", 27500, mixers[3].transform.position, _sMixer, new[] { mixers[3].gameObject },
                 "Whip cranberries into tart filling", zCranOven);
-            var zDesk2 = TUnlock("b_desk2", "Second Desk", 19000, zoneB.transform.position, _sTruck, new[] { deskBRoot }, "Two trucks at once!");
+            var zDesk2 = TUnlock("b_desk2", "Second Desk", 24500, zoneB.transform.position, _sTruck, new[] { deskBRoot }, "Two trucks at once!");
             _tPadSize = 2.3f;
-            var zFarmerBlue = TUnlock("b_farmer_blue", "Blueberry Farmer", 13000, farmers[2].transform.position, _uFarmer, new[] { farmers[2] }, "Blueberries picked for you");
+            var zFarmerBlue = TUnlock("b_farmer_blue", "Blueberry Farmer", 17000, farmers[2].transform.position, _uFarmer, new[] { farmers[2] }, "Blueberries picked for you");
             _tPadSize = 2.9f;
-            var zCranFarm = TUnlock("b_cran_farm", "Cranberry Bog", 23000, fields[3].transform.position, fruitIcon[10], new[] { fields[3].transform.parent.gameObject },
+            var zCranFarm = TUnlock("b_cran_farm", "Cranberry Bog", 30000, fields[3].transform.position, fruitIcon[10], new[] { fields[3].transform.parent.gameObject },
                 "Glossy cranberries for the finest juice", zCranMixer, zFarmerBlue, zDesk2);
-            var zCranPress = TUnlock("b_cran_press", "Cranberry Press", 17000, presses[3].transform.position, _uMachine, new[] { presses[3].gameObject },
+            var zCranPress = TUnlock("b_cran_press", "Cranberry Press", 22000, presses[3].transform.position, _uMachine, new[] { presses[3].gameObject },
                 "Cranberry Cooler sells for top dollar", zCranFarm);
-            var zPicnic = TUnlock("b_picnic", "Picnic Garden", 6000, picnic.transform.position, _uStar, new[] { picnic }, "Visitors love a picnic");
-            var zLoader = TUnlock("b_loader", "Hire Loader", 14000, loader.transform.position, _uWaiter, new[] { loader }, "The loader packs the boxes for you");
-            var zBlueOven = TUnlock("b_blue_oven", "Blueberry Oven", 12000, ovens[2].transform.position, _sOven, new[] { ovens[2].gameObject },
+            var zPicnic = TUnlock("b_picnic", "Picnic Garden", 6000, picnic.transform.position, _uStar, new[] { picnic }, "Charm: customers pay +10%");
+            var zLoader = TUnlock("b_loader", "Hire Loader", 18000, loader.transform.position, _uWaiter, new[] { loader }, "The loader packs the boxes for you");
+            var zBlueOven = TUnlock("b_blue_oven", "Blueberry Oven", 15500, ovens[2].transform.position, _sOven, new[] { ovens[2].gameObject },
                 "Blueberry cheesecake is on the menu", zLoader, zCranPress, zPicnic);
-            var zBlueMixer = TUnlock("b_blue_mixer", "Blueberry Cake Mixer", 9000, mixers[2].transform.position, _sMixer, new[] { mixers[2].gameObject },
+            var zBlueMixer = TUnlock("b_blue_mixer", "Blueberry Cake Mixer", 11500, mixers[2].transform.position, _sMixer, new[] { mixers[2].gameObject },
                 "Blueberries into creamy batter", zBlueOven);
-            var zBaker = TUnlock("b_baker", "Hire Baker", 11000, baker.transform.position, _uChef ? _uChef : _uWaiter, new[] { baker }, "The baker serves the cake queue");
+            var zBaker = TUnlock("b_baker", "Hire Baker", 14500, baker.transform.position, _uChef ? _uChef : _uWaiter, new[] { baker }, "The baker serves the cake queue");
             _tPadSize = 2.3f;
-            var zFarmerRasp = TUnlock("b_farmer_rasp", "Raspberry Farmer", 8000, farmers[1].transform.position, _uFarmer, new[] { farmers[1] }, "Raspberries picked for you");
+            var zFarmerRasp = TUnlock("b_farmer_rasp", "Raspberry Farmer", 10500, farmers[1].transform.position, _uFarmer, new[] { farmers[1] }, "Raspberries picked for you");
             _tPadSize = 2.9f;
-            var zBlueFarm = TUnlock("b_blue_farm", "Blueberry Patch", 9500, fields[2].transform.position, fruitIcon[9], new[] { fields[2].transform.parent.gameObject },
+            var zBlueFarm = TUnlock("b_blue_farm", "Blueberry Patch", 12500, fields[2].transform.position, fruitIcon[9], new[] { fields[2].transform.parent.gameObject },
                 "Plump blueberries, bigger profits", zBlueMixer, zFarmerRasp, zBaker);
-            var zBluePress = TUnlock("b_blue_press", "Blueberry Press", 7000, presses[2].transform.position, _uMachine, new[] { presses[2].gameObject },
+            var zBluePress = TUnlock("b_blue_press", "Blueberry Press", 9000, presses[2].transform.position, _uMachine, new[] { presses[2].gameObject },
                 "Blueberry Shake unlocked", zBlueFarm);
-            var zRaspOven = TUnlock("b_rasp_oven", "Raspberry Oven", 10000, ovens[1].transform.position, _sOven, new[] { ovens[1].gameObject }, "Raspberry velvet cakes!");
-            var zRaspMixer = TUnlock("b_rasp_mixer", "Raspberry Cake Mixer", 7500, mixers[1].transform.position, _sMixer, new[] { mixers[1].gameObject },
+            var zRaspOven = TUnlock("b_rasp_oven", "Raspberry Oven", 13000, ovens[1].transform.position, _sOven, new[] { ovens[1].gameObject }, "Raspberry velvet cakes!");
+            var zRaspMixer = TUnlock("b_rasp_mixer", "Raspberry Cake Mixer", 10000, mixers[1].transform.position, _sMixer, new[] { mixers[1].gameObject },
                 "Raspberries into pink batter", zRaspOven);
             var zDelivery = TUnlock("b_delivery", "Delivery Desk", 5500, zoneA.transform.position, _sTruck, new[] { deskARoot },
                 "Pack boxes for trucks - BIG rewards!", zBluePress, zRaspMixer);
             zDelivery.peekOnUnlock = true;
-            var zGazebo = TUnlock("b_gazebo", "Flower Gazebo", 2000, gazebo.transform.position, _uStar, new[] { gazebo }, "A sweet spot for the village");
+            var zGazebo = TUnlock("b_gazebo", "Flower Gazebo", 2000, gazebo.transform.position, _uStar, new[] { gazebo }, "Charm: customers pay +10%");
             _tPadSize = 2.3f;
             var zFarmerStraw = TUnlock("b_farmer_straw", "Strawberry Farmer", 4500, farmers[0].transform.position, _uFarmer, new[] { farmers[0] }, "Your first berry picker");
             _tPadSize = 2.9f;
@@ -318,6 +318,8 @@ namespace JuiceKing.EditorTools
             var em = systems.AddComponent<ExpansionManager>();
             em.nextExpansion = -1;
             em.intro = _uiIntro;
+            // The last world still gets its celebration (and a one-time reward) when everything is done.
+            em.completionPopup = _uiCompletion;
             if (_uiIntro != null)
             {
                 _uiIntro.title = "Welcome to Berry Blast!";

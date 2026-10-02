@@ -45,7 +45,8 @@ namespace JuiceKing
 
         protected override void OnPlayerEnter()
         {
-            if (FoxRaid.I != null) FoxRaid.I.OfferRestore(field);
+            // Not while the first-raid cutscene still plays (the pad scales in under the letterbox).
+            if (FoxRaid.I != null && !ExpansionIntro.Playing && !FoxRaid.I.Raiding) FoxRaid.I.OfferRestore(field);
         }
 
         protected override float TickCarrier(Carrier c, float timer) => timer;

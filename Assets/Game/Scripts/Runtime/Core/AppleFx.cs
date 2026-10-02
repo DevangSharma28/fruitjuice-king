@@ -19,6 +19,17 @@ namespace JuiceKing
             if (HUD.I != null) HUD.I.FlyApples(worldPos, count);
         }
 
+        /// <summary>Only the celebration of apples that were already granted (sparkles, text, flight to the counter).</summary>
+        public static void Show(Vector3 worldPos, int count)
+        {
+            if (count <= 0) return;
+            Fx.Sparkle(worldPos, Gold, 10);
+            Fx.Stars(worldPos, 6, Gold);
+            Sfx.Play(SfxId.Chime, 0.5f);
+            FloatingText.Show("+" + count + " GOLDEN APPLE" + (count > 1 ? "S" : ""), worldPos + Vector3.up * 0.6f, Gold, 1.1f, 1.3f, 1.1f);
+            if (HUD.I != null) HUD.I.FlyApples(worldPos, count);
+        }
+
         /// <summary>Feedback where apples were spent (the counter change itself comes from GameManager).</summary>
         public static void Spend(Vector3 worldPos)
         {

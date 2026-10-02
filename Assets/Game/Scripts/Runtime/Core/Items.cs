@@ -148,13 +148,14 @@ namespace JuiceKing
         public const float CashBoostMult = 2f;
         public const float TurboMoveMult = 1.35f;
         public const float TurboWorkMult = 1.8f;
-        public const float FreeCashCooldown = 120f;
-        public const float UnlockAssistCooldown = 60f;
+        public const float FreeCashCooldown = 180f;
+        public const float UnlockAssistCooldown = 150f;
 
-        /// <summary>Free cash reward scales with how far the player has progressed.</summary>
+        /// <summary>Legacy free cash formula (world 0 before the release pass). The bag now follows <see cref="Economy.FreeCash"/>.</summary>
         public static int FreeCash(int unlockedCount) => 40 + unlockedCount * 35;
 
-        // Offline earnings (only once a helper is hired)
+        // Offline earnings (only once a helper is hired). The cap and rate now live in Economy (OfflineMaxSeconds,
+        // OfflinePerSecond); OfflineRate is the fallback for saves made before income was measured.
         public const float OfflineMinSeconds = 60f;
         public const float OfflineMaxSeconds = 30f * 60f;
         public static float OfflineRate(int juicers, int helpers) => helpers <= 0 ? 0f : juicers * 0.03f + helpers * 0.12f;

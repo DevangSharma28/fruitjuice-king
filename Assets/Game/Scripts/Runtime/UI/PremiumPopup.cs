@@ -27,6 +27,8 @@ namespace JuiceKing
 
         Action _onApple, _onAd;
         Func<string> _live;
+        Func<bool> _stillValid;
+        float _liveT;
         string _placement;
         int _cost;
         bool _open;
@@ -42,11 +44,17 @@ namespace JuiceKing
             gameObject.SetActive(false);
         }
 
-        public void Show(string title, string body, Sprite sprite, int appleCost, Func<string> live, Action onApple, string adPlacement, Action onAd)
+        /// <param name="stillValid">Checked before anything is charged: false (the farm already grew back...) closes the
+        /// card instead of taking apples or an ad for nothing. Also polled while open.</param>
+        public void Show(string title, string body, Sprite sprite, int appleCost, Func<string> live, Action onApple, string adPlacement, Action onAd,
+            Func<bool> stillValid = null)
         {
             if (_open) return;
             if (OfferPopup.I != null && OfferPopup.I.IsOpen) return;
+            if (ExpansionIntro.Playing) return;
             _open = true;
+            _stillValid = stillValid;
+            _liveT = 0f;
             _onApple = onApple;
             _onAd = onAd;
             _live = live;
@@ -60,11 +68,13 @@ namespace JuiceKing
                 icon.enabled = sprite != null;
             }
             if (appleCostText != null) appleCostText.text = appleCost.ToString();
-            adButton.gameObject.SetActive(onAd != null);
+            adButton.gameObject.SetActive(onAd != null && Ads.IsReady);
+            appleButton.interactable = true;
+            adButton.interactable = true;
             RefreshLive();
             RefreshAfford();
             Platform.Pause("premium");
-            InputJoystick.Blocked = true;
+            InputJoystick.Block("premium", true);
             gameObject.SetActive(true);
             Tweener.Scale(window, Vector3.one * 0.4f, Vector3.one, 0.4f, Ease.OutBack);
             if (iconRect != null) Tweener.Scale(iconRect, Vector3.zero, Vector3.one, 0.55f, Ease.OutElastic, null, 0.1f);
@@ -88,7 +98,18 @@ namespace JuiceKing
         void Update()
         {
             if (!_open) return;
-            RefreshLive();
+            if (_stillValid != null && !_stillValid())
+            {
+                Close();
+                return;
+            }
+            // The live line ("Regrows in 4:12") only changes once a second.
+            _liveT -= Time.unscaledDeltaTime;
+            if (_liveT <= 0f)
+            {
+                _liveT = 0.25f;
+                RefreshLive();
+            }
             RefreshAfford();
             float s = 1f + Mathf.Sin(Time.unscaledTime * 5f) * 0.035f;
             appleButton.transform.localScale = new Vector3(s, s, 1f);
@@ -97,7 +118,13 @@ namespace JuiceKing
 
         void OnApple()
         {
-            if (GameManager.I == null) return;
+            // The card stays clickable during its closing tween: a second tap must not charge again.
+            if (!_open || GameManager.I == null) return;
+            if (_stillValid != null && !_stillValid())
+            {
+                Close();
+                return;
+            }
             if (!GameManager.I.TrySpendApples(_cost))
             {
                 Sfx.Play(SfxId.Error, 0.35f);
@@ -106,6 +133,7 @@ namespace JuiceKing
                 return;
             }
             var then = _onApple;
+            Analytics.Log(Analytics.ApplesSpent, "amount", _cost, "what", _placement ?? "premium");
             Close(() =>
             {
                 if (GameRefs.I != null && GameRefs.I.player != null) AppleFx.Spend(GameRefs.I.player.transform.position + Vector3.up * 2f);
@@ -115,6 +143,12 @@ namespace JuiceKing
 
         void OnAd()
         {
+            if (!_open) return;
+            if (_stillValid != null && !_stillValid())
+            {
+                Close();
+                return;
+            }
             var then = _onAd;
             var placement = _placement;
             Close(() => Ads.ShowRewarded(placement, then));
@@ -124,8 +158,11 @@ namespace JuiceKing
         {
             if (!_open) return;
             _open = false;
+            _stillValid = null;
+            appleButton.interactable = false;
+            adButton.interactable = false;
             Platform.Resume("premium");
-            InputJoystick.Blocked = false;
+            InputJoystick.Block("premium", false);
             Sfx.Play(SfxId.Click, 0.5f);
             Tweener.Scale(window, window.localScale, Vector3.zero, 0.16f, Ease.InQuad, () =>
             {

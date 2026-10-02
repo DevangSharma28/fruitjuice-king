@@ -18,17 +18,20 @@ namespace JuiceKing
             playerOnly = true;
         }
 
+        // Cached once: lambdas without captures, so binning a stack allocates nothing.
+        static readonly System.Predicate<ItemType> Unusable = t =>
+            t.IsSlice() && !GameManager.I.HasJuicer(t.Fruit()) && !GameManager.I.HasCakeMixer(t.Fruit());
+        static readonly System.Predicate<ItemType> IsSlice = t => t.IsSlice();
+        static readonly System.Predicate<ItemType> IsJuice = t => t.IsJuice();
+        static readonly System.Predicate<ItemType> IsCake = t => t.IsCake();
+
         protected override float TickCarrier(Carrier c, float timer)
         {
             if (bin == null || timer < entryDelay + interval) return timer;
             while (timer >= entryDelay + interval)
             {
                 timer -= interval;
-                var gm = GameManager.I;
-                var it = c.TakeLast(t => t.IsSlice() && !gm.HasJuicer(t.Fruit()))
-                         ?? c.TakeLast(t => t.IsSlice())
-                         ?? c.TakeLast(t => t.IsJuice())
-                         ?? c.TakeLast(t => t.IsCake());
+                var it = c.TakeLast(Unusable) ?? c.TakeLast(IsSlice) ?? c.TakeLast(IsJuice) ?? c.TakeLast(IsCake);
                 if (it == null) break;
                 bin.Swallow(it, c);
             }

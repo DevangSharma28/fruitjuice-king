@@ -73,6 +73,46 @@ namespace JuiceKing
             return null;
         }
 
+        /// <summary>Allocation-free <see cref="TakeLast(Predicate{ItemType})"/> for one item type (hot paths).</summary>
+        public StackItem TakeLast(ItemType type)
+        {
+            for (int i = items.Count - 1; i >= 0; i--)
+            {
+                var it = items[i];
+                if (it.inTransit || it.type != type) continue;
+                items.RemoveAt(i);
+                it.transform.SetParent(null, true);
+                OnChanged?.Invoke();
+                return it;
+            }
+            return null;
+        }
+
+        /// <summary>Landed items of one type (allocation-free).</summary>
+        public int CountReady(ItemType type)
+        {
+            int c = 0;
+            for (int i = 0; i < items.Count; i++)
+                if (!items[i].inTransit && items[i].type == type) c++;
+            return c;
+        }
+
+        /// <summary>Items of one type, landed or not (allocation-free).</summary>
+        public int CountOf(ItemType type)
+        {
+            int c = 0;
+            for (int i = 0; i < items.Count; i++)
+                if (items[i].type == type) c++;
+            return c;
+        }
+
+        public bool Contains(ItemType type)
+        {
+            for (int i = 0; i < items.Count; i++)
+                if (!items[i].inTransit && items[i].type == type) return true;
+            return false;
+        }
+
         public bool Contains(Predicate<ItemType> filter)
         {
             for (int i = 0; i < items.Count; i++)

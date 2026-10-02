@@ -64,7 +64,7 @@ namespace JuiceKing
         {
             if (_cam != null)
             {
-                _cam.layerCullSpherical = true;
+                // (layerCullSpherical is built-in-renderer only: URP ignores it and logs a warning.)
                 ApplyZoom(1f);
             }
             _urp = QualitySettings.renderPipeline as UniversalRenderPipelineAsset;

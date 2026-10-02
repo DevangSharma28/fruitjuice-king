@@ -39,6 +39,11 @@ namespace JuiceKing
         float _fill;
         int _lastSecond = -1;
         int _lastDelivered = -1;
+        DeliveryOrder _lastOrder;
+        bool _lastBoost;
+        // Golden Apple spend needs a second tap ("TAP TO CONFIRM") within a few seconds.
+        float _confirmUntil;
+        int _appleShown = int.MinValue;
 
         public bool IsOpen => _open;
 
@@ -60,6 +65,9 @@ namespace JuiceKing
             gameObject.SetActive(true);
             _lastSecond = -1;
             _lastDelivered = -1;
+            _lastOrder = null;
+            _confirmUntil = 0f;
+            _appleShown = int.MinValue;
             _dm = DeliveryManager.Focus();
             var dm = _dm;
             _fill = dm != null && dm.Order != null ? dm.Order.Progress : 0f;
@@ -83,18 +91,46 @@ namespace JuiceKing
         void OnApple()
         {
             var dm = _dm;
-            if (dm == null) return;
-            bool ok = dm.Order == null ? dm.CallTruckNow() : dm.FinishNow();
-            if (!ok)
+            if (dm == null || !_open) return;
+            bool call = dm.Order == null;
+            int cost = call ? Economy.ApplesCallTruck : dm.FinishCost;
+            string why = call && !dm.CanOrder ? "Nothing to order yet - open a farm first"
+                : !call && cost <= 0 ? "Everything is already on its way!"
+                : GameManager.I.Apples < cost ? "Not enough Golden Apples" : null;
+            if (why != null)
             {
                 Sfx.Play(SfxId.Error, 0.3f);
                 if (appleButton != null) Tweener.Punch(appleButton.transform, 0.2f, 0.25f, Vector3.one);
-                if (HUD.I != null) HUD.I.Toast("Not enough Golden Apples", GameRefs.I != null ? GameRefs.I.appleIcon : null);
+                if (HUD.I != null) HUD.I.Toast(why, GameRefs.I != null ? GameRefs.I.appleIcon : null);
+                // Out of apples: the shop is one tap away.
+                if (GameManager.I.Apples < cost && ShopPopup.I != null)
+                {
+                    Close();
+                    ShopPopup.I.Open(ShopSection.Apples);
+                }
+                return;
+            }
+            // First tap arms, second tap spends: premium currency is never spent by accident.
+            if (Time.unscaledTime > _confirmUntil)
+            {
+                _confirmUntil = Time.unscaledTime + 3f;
+                _appleShown = int.MinValue;
+                Sfx.Play(SfxId.Click, 0.4f, 1.3f);
+                Haptics.Play(HapticKind.Selection);
+                if (appleButton != null) Tweener.Punch(appleButton.transform, 0.15f, 0.2f, Vector3.one);
+                return;
+            }
+            _confirmUntil = 0f;
+            bool ok = call ? dm.CallTruckNow() : dm.FinishNow();
+            if (!ok)
+            {
+                Sfx.Play(SfxId.Error, 0.3f);
                 return;
             }
             Sfx.Play(SfxId.Sparkle, 0.5f, 1.2f);
             _lastSecond = -1;
             _lastDelivered = -1;
+            _appleShown = int.MinValue;
         }
 
         void GoToBay()
@@ -128,8 +164,11 @@ namespace JuiceKing
             {
                 _fill = Mathf.MoveTowards(_fill, o.Progress, Time.unscaledDeltaTime * 1.5f);
                 if (progressFill != null) progressFill.fillAmount = _fill;
-                if (o.delivered != _lastDelivered)
+                bool boost = Boosts.IsActive(BoostKind.Cash2x);
+                if (o.delivered != _lastDelivered || o != _lastOrder || boost != _lastBoost)
                 {
+                    _lastOrder = o;
+                    _lastBoost = boost;
                     if (_lastDelivered >= 0 && countText != null) Tweener.Punch(countText.transform, 0.25f, 0.2f, Vector3.one);
                     _lastDelivered = o.delivered;
                     if (clientText != null) clientText.text = o.client;
@@ -143,8 +182,13 @@ namespace JuiceKing
             {
                 bool offer = !has || dm.Loading;
                 if (appleButton.gameObject.activeSelf != offer) appleButton.gameObject.SetActive(offer);
-                if (offer && appleText != null)
-                    appleText.text = !has ? "CALL NOW  " + Economy.ApplesCallTruck : "FINISH  " + dm.FinishCost;
+                bool confirming = Time.unscaledTime <= _confirmUntil;
+                int key = !offer ? 0 : (confirming ? 100000 : 0) + (!has ? -1 - Economy.ApplesCallTruck : dm.FinishCost);
+                if (offer && appleText != null && key != _appleShown)
+                {
+                    _appleShown = key;
+                    appleText.text = confirming ? "TAP TO CONFIRM" : !has ? "CALL NOW  " + Economy.ApplesCallTruck : "FINISH  " + dm.FinishCost;
+                }
             }
 
             int sec = Mathf.CeilToInt(has ? dm.TimeLeft : Mathf.Max(0f, dm.Cooldown));

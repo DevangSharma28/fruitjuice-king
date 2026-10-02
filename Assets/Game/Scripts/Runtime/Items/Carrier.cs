@@ -66,6 +66,36 @@ namespace JuiceKing
             return false;
         }
 
+        /// <summary>Allocation-free count of one item type.</summary>
+        public int CountOf(ItemType type)
+        {
+            int c = 0;
+            for (int i = 0; i < items.Count; i++)
+                if (items[i].type == type) c++;
+            return c;
+        }
+
+        public bool Contains(ItemType type)
+        {
+            for (int i = 0; i < items.Count; i++)
+                if (items[i].type == type) return true;
+            return false;
+        }
+
+        ItemType _onlyType;
+        Predicate<ItemType> _onlyFilter;
+
+        /// <summary>Restrict pickups to one item type, reusing the filter delegate while the type stays the same.</summary>
+        public void PickupOnly(ItemType type)
+        {
+            if (_onlyFilter == null || _onlyType != type)
+            {
+                _onlyType = type;
+                _onlyFilter = t => t == _onlyType;
+            }
+            pickupFilter = _onlyFilter;
+        }
+
         public int CountOf(Predicate<ItemType> filter)
         {
             int c = 0;

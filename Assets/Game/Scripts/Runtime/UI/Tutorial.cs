@@ -9,6 +9,9 @@ namespace JuiceKing
     /// </summary>
     public class Tutorial : MonoBehaviour
     {
+        /// <summary>First step of free play (the scripted lessons 0-5 are done).</summary>
+        public const int FreePlayStep = 6;
+
         public Transform arrow;
         public Transform pointer;
         [Tooltip("UI arrow clamped to the screen edge while the target is off-screen.")]
@@ -32,7 +35,10 @@ namespace JuiceKing
         float _ringT;
         Vector3? _lastTarget;
         int _lastStep = -1;
-        long _stepMoney;
+        long _stepEarned;
+        // The objective text is rebuilt a few times a second, not every frame (string building allocates).
+        float _thinkT;
+        Vector3? _target;
 
         static readonly string[] Plural =
             { "oranges", "watermelons", "pineapples", "coconuts", "mangoes", "bananas", "papayas", "strawberries", "raspberries", "blueberries", "cranberries" };
@@ -51,7 +57,12 @@ namespace JuiceKing
 
         void OnUnlocked(UnlockZone z)
         {
-            if (GameManager.I.TutorialStep == 5) GameManager.I.TutorialStep = 6;
+            if (GameManager.I.TutorialStep == 5)
+            {
+                GameManager.I.TutorialStep = FreePlayStep;
+                Analytics.Log(Analytics.TutorialComplete);
+            }
+            _thinkT = 0f;
         }
 
         void Update()
@@ -67,8 +78,17 @@ namespace JuiceKing
             if (step != _lastStep)
             {
                 _lastStep = step;
-                _stepMoney = gm.Money;
+                // Earnings, not the balance: paying for a pad meanwhile must not hold the step back.
+                _stepEarned = gm.data.stats.earned;
+                _thinkT = 0f;
             }
+            _thinkT -= Time.deltaTime;
+            if (_thinkT > 0f)
+            {
+                UpdateMarkers(CameraFollow.Busy ? null : _target);
+                return;
+            }
+            _thinkT = 0.2f;
             Vector3? target = null;
             string text = null;
             string key = null;
@@ -86,12 +106,24 @@ namespace JuiceKing
                 case 1:
                     text = "Drop the " + fruits + " into the " + MachineWord;
                     target = firstJuicer.inputZone.transform.position;
-                    if (firstJuicer.inputPile.Count > 0 || firstJuicer.outputPile.Count > 0 || _player.Count == 0) Advance();
+                    // Enough for a batch (or one already running) - a single slice would leave step 2 waiting forever.
+                    if (firstJuicer.Working || firstJuicer.outputPile.Count > 0 ||
+                        firstJuicer.inputPile.Count >= Balance.SlicesPerJuice[(int)firstJuicer.kind]) Advance();
+                    else if (_player.Count == 0) gm.TutorialStep = 0;
                     break;
                 case 2:
-                    text = "Grab the fresh juice!";
+                    if (!firstJuicer.Working && firstJuicer.outputPile.Count == 0 && !_player.Contains(IsJuice) &&
+                        firstJuicer.inputPile.Count < Balance.SlicesPerJuice[(int)firstJuicer.kind])
+                    {
+                        // Not enough in the machine for a cup: send the player back for more.
+                        text = _player.Contains(IsSlice) ? "Drop more " + fruits + " into the " + MachineWord : "Cut more " + fruits + "!";
+                        var nf = firstField.NearestReady(_player.transform.position);
+                        target = _player.Contains(IsSlice) ? firstJuicer.inputZone.transform.position : nf != null ? nf.visual.position : firstField.Center;
+                        break;
+                    }
+                    text = firstJuicer.outputPile.Count == 0 && firstJuicer.Working ? "Your juice is being made..." : "Grab the fresh juice!";
                     target = firstJuicer.outputZone.transform.position;
-                    if (_player.Contains(t => t.IsJuice())) Advance();
+                    if (_player.Contains(IsJuice)) Advance();
                     break;
                 case 3:
                     text = "Put the juice on the counter";
@@ -102,7 +134,7 @@ namespace JuiceKing
                     text = "Customers pay here - collect the cash!";
                     target = cash.zone.transform.position;
                     // Money you already had (a new world starts with some) does not count: collect a payment first.
-                    if (gm.Money > _stepMoney) Advance();
+                    if (gm.data.stats.earned > _stepEarned) Advance();
                     break;
                 case 5:
                     text = "Spend cash to unlock new stuff!";
@@ -150,10 +182,14 @@ namespace JuiceKing
                 }
             }
 
+            _target = target;
             if (CameraFollow.Busy) target = null;
             if (HUD.I != null) HUD.I.SetObjective(text, key);
             UpdateMarkers(target);
         }
+
+        static readonly System.Predicate<ItemType> IsJuice = t => t.IsJuice();
+        static readonly System.Predicate<ItemType> IsSlice = t => t.IsSlice();
 
         /// <summary>After the tutorial: always show the next goal on the way to completing this world.</summary>
         void FreePlay(GameManager gm, ref string text, ref Vector3? target, ref string key)
@@ -253,6 +289,8 @@ namespace JuiceKing
         {
             if (firstCakeMixer == null || firstOven == null || cakeCounter == null) return;
             if (!firstCakeMixer.isActiveAndEnabled || !firstOven.isActiveAndEnabled || gm.data.cakesSold > 0) return;
+            // A fox-raided berry patch cannot feed the mixer: the restore hint matters more than the cake lesson.
+            if (FoxRaid.I != null && FoxRaid.I.DamagedCount > 0 && !gm.HasField(firstCakeMixer.kind)) return;
             if (UnlockManager.FirstAvailable() is UnlockZone z && gm.Money >= z.Remaining) return;
             var cake = firstOven.OutputType;
             var berry = firstCakeMixer.InputType;

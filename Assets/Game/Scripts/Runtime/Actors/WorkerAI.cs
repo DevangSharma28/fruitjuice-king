@@ -60,7 +60,12 @@ namespace JuiceKing
         DropZone _feedTarget;
         int _trip;
         readonly List<IProducer> _producers = new List<IProducer>();
+        readonly List<DropZone> _feedOptions = new List<DropZone>(4);
+        readonly int[] _stock = new int[ItemTypes.FruitCount];
         static float _nextToast;
+        // Stuck recovery: a helper that has not moved toward its goal for a while gets a fresh path.
+        float _stuckT;
+        Vector3 _lastPos;
 
         void Awake()
         {
@@ -123,6 +128,7 @@ namespace JuiceKing
                 else if (role == Role.Loader) DecideLoader(0.25f);
                 else DecideWaiter(0.25f);
                 if (_hasDest) agent.SetDestination(_dest);
+                CheckStuck(0.25f);
             }
 
             // Face the fruit while sawing.
@@ -136,6 +142,30 @@ namespace JuiceKing
 
             if (_warnShown && warnBubble != null)
                 warnBubble.transform.localScale = _warnScale * (1f + Mathf.Sin(Time.time * 6f) * 0.06f);
+        }
+
+        /// <summary>
+        /// A helper wedged against another actor or an unlock reveal stops making progress: after 3 s without moving
+        /// while it still has a way to go, it is snapped back onto the NavMesh and re-pathed.
+        /// </summary>
+        void CheckStuck(float dt)
+        {
+            Vector3 pos = transform.position;
+            bool far = _hasDest && (pos - _dest).sqrMagnitude > 2.25f;
+            bool moved = (pos - _lastPos).sqrMagnitude > 0.0025f;
+            _lastPos = pos;
+            if (!far || moved || _task == Task.Waiting || (saw != null && saw.Target != null))
+            {
+                _stuckT = 0f;
+                return;
+            }
+            _stuckT += dt;
+            if (_stuckT < 3f) return;
+            _stuckT = 0f;
+            agent.ResetPath();
+            Vector3 nudge = pos + new Vector3(Random.Range(-0.6f, 0.6f), 0f, Random.Range(-0.6f, 0.6f));
+            if (NavMesh.SamplePosition(nudge, out var hit, 2f, NavMesh.AllAreas)) agent.Warp(hit.position);
+            if (_hasDest) agent.SetDestination(_dest);
         }
 
         void SetDest(Vector3 p)
@@ -158,7 +188,8 @@ namespace JuiceKing
         {
             var main = juicer != null ? juicer.inputZone : null;
             if (feedZones == null || feedZones.Length == 0) return main;
-            var options = new List<DropZone>(feedZones.Length + 1);
+            var options = _feedOptions;
+            options.Clear();
             if (main != null && main.isActiveAndEnabled && juicer.isActiveAndEnabled) options.Add(main);
             foreach (var z in feedZones)
                 if (z != null && z.isActiveAndEnabled && z.Receiver != null) options.Add(z);
@@ -184,7 +215,15 @@ namespace JuiceKing
                 }
                 else
                 {
-                    if (_feedTarget == null || !_feedTarget.isActiveAndEnabled) _feedTarget = PickFeedTarget();
+                    // The pad filled up (its machine is backed up): switch to another machine that has room rather
+                    // than standing there with a full basket while the other one starves.
+                    if (_feedTarget == null || !_feedTarget.isActiveAndEnabled ||
+                        (_feedTarget.Receiver != null && !_feedTarget.Receiver.HasSpace))
+                    {
+                        var alt = PickFeedTarget();
+                        if (alt != null && (_feedTarget == null || !_feedTarget.isActiveAndEnabled || alt.Receiver == null || alt.Receiver.HasSpace))
+                            _feedTarget = alt;
+                    }
                     if (_feedTarget != null) SetDest(_feedTarget.transform.position);
                     return;
                 }
@@ -223,17 +262,23 @@ namespace JuiceKing
             kind = FruitKind.Orange;
             need = 0;
             if (customers == null || counter == null) return false;
-            var stock = new int[ItemTypes.FruitCount];
+            var stock = _stock;
             for (int k = 0; k < stock.Length; k++)
             {
                 var jt = counter.ProductOf((FruitKind)k);
-                stock[k] = counter.display.CountOf(t => t == jt) + carrier.CountOf(t => t == jt);
+                stock[k] = counter.display.CountOf(jt) + carrier.CountOf(jt);
             }
             var q = customers.Queue;
             for (int i = 0; i < q.Count; i++)
             {
                 var c = q[i];
                 int k = (int)c.want;
+                // Nothing makes it right now (fox-raided farm): do not camp at an empty machine for it.
+                if (stock[k] == 0)
+                {
+                    var maker = ProducerFor(counter.ProductOf(c.want));
+                    if (maker == null || (maker.Available == 0 && !IsOrderable(c.want))) continue;
+                }
                 int rem = c.wantCount - c.got;
                 int use = Mathf.Min(rem, stock[k]);
                 stock[k] -= use;
@@ -243,6 +288,14 @@ namespace JuiceKing
                 need = rem;
                 return true;
             }
+            return false;
+        }
+
+        bool IsOrderable(FruitKind k)
+        {
+            var list = GameManager.I.Orderable(counter.line);
+            for (int i = 0; i < list.Count; i++)
+                if (list[i] == k) return true;
             return false;
         }
 
@@ -258,7 +311,7 @@ namespace JuiceKing
         {
             bool hasDemand = FindDemand(out var kind, out int need);
             var wanted = counter != null ? counter.ProductOf(kind) : ItemTypes.Juice(kind);
-            int carryingWanted = carrier.CountOf(t => t == wanted);
+            int carryingWanted = carrier.CountOf(wanted);
 
             // Deliver when the job is covered, the hands are full, or we are holding something we should not keep.
             bool holdingOther = carrier.Count > carryingWanted;
@@ -287,7 +340,7 @@ namespace JuiceKing
             }
 
             // Collect exactly this product, up to what the customer still needs.
-            carrier.pickupFilter = t => t == wanted;
+            carrier.PickupOnly(wanted);
             carrier.maxPickup = Mathf.Min(carrier.capacity, carryingWanted + need);
             var pad = j.OutputZone.transform.position;
             SetDest(pad);
@@ -340,7 +393,7 @@ namespace JuiceKing
             var dm = _desk != null ? _desk.Manager : null;
             bool loading = dm != null && dm.Loading;
             var wanted = loading ? dm.Order.Item : ItemType.CoconutJuice;
-            int carryingWanted = carrier.CountOf(t => t == wanted);
+            int carryingWanted = carrier.CountOf(wanted);
             int need = loading ? dm.Order.Remaining - dm.InFlight - carryingWanted : 0;
 
             // Leftovers from a finished order go back to the shop counter that sells them.
@@ -380,7 +433,7 @@ namespace JuiceKing
                 return;
             }
 
-            carrier.pickupFilter = t => t == wanted;
+            carrier.PickupOnly(wanted);
             carrier.maxPickup = Mathf.Min(carrier.capacity, carryingWanted + need);
             var pad = j.OutputZone.transform.position;
             SetDest(pad);

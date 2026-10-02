@@ -97,7 +97,22 @@ namespace JuiceKing
             if (GameManager.I != null) GameManager.I.MoneyChanged -= OnMoney;
         }
 
-        void OnMoney(long v, long d) => Refresh();
+        bool _refreshDue;
+        float _refreshT;
+        bool _boughtThisVisit;
+
+        // Money changes many times a second while cash is collected: refresh the rows at most a few times a second.
+        void OnMoney(long v, long d) => _refreshDue = true;
+
+        void LateUpdate()
+        {
+            if (!_refreshDue) return;
+            _refreshT -= Time.unscaledDeltaTime;
+            if (_refreshT > 0f) return;
+            _refreshT = 0.15f;
+            _refreshDue = false;
+            Refresh();
+        }
 
         List<UpgradeDef> Tree => Upgrades.ForWorld(Economy.World);
 
@@ -106,6 +121,7 @@ namespace JuiceKing
             Dismissed = false;
             if (_open) return;
             _open = true;
+            _boughtThisVisit = false;
             gameObject.SetActive(true);
             if (_category == null) _category = FirstAffordableCategory();
             SelectTab(_category, false);
@@ -121,6 +137,8 @@ namespace JuiceKing
             {
                 if (!_open) gameObject.SetActive(false);
             });
+            // Leaving the shop after a purchase is a natural break (forced ads are paced and off after Remove Ads).
+            if (_boughtThisVisit) Tweener.Delay(0.4f, () => Ads.TryShowInterstitial(Ads.InterstitialUpgradeClose));
         }
 
         /// <summary>Open on the first tab with something the player can buy right now.</summary>
@@ -165,6 +183,9 @@ namespace JuiceKing
             if (row.def == null) return;
             if (GameManager.I.TryBuy(row.def))
             {
+                _boughtThisVisit = true;
+                Analytics.Log(Analytics.Upgrade, "id", row.def.id, "level", row.def.Level());
+                Haptics.Play(HapticKind.Medium);
                 Sfx.Play(SfxId.Unlock, 0.6f);
                 Sfx.Play(SfxId.Sparkle, 0.35f);
                 Tweener.Punch(row.button.transform, 0.2f, 0.25f, Vector3.one);

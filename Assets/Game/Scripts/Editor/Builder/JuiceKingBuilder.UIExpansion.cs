@@ -21,7 +21,19 @@ namespace JuiceKing.EditorTools
             var panelRoot = Stretch("UpgradePanel", safe);
             var tree = Upgrades.ForWorld(world);
             bool tabbed = world > 0;
-            int rowsN = tabbed ? 4 : tree.Count;
+            // One row per upgrade of the fullest tab (Berry Blast's FARM and BUSINESS tabs hold five).
+            int rowsN = tree.Count;
+            if (tabbed)
+            {
+                rowsN = 0;
+                foreach (var cat in Upgrades.CategoriesFor(world))
+                {
+                    int n = 0;
+                    foreach (var d in tree)
+                        if (d.category == cat) n++;
+                    rowsN = Mathf.Max(rowsN, n);
+                }
+            }
             const float awningScale = 2f;
             const float rowH = 196f;
             float head = (_uPanelAwning ? _uPanelAwning.border.w : 118f) * awningScale;
@@ -311,9 +323,9 @@ namespace JuiceKing.EditorTools
             sub.fontSizeMin = 28f;
             sub.fontSizeMax = 42f;
 
-            string[] names = { "Total earnings", "Juice produced", "Fruit harvested", "Customers served", "Expansion unlocked" };
-            var nextIcon = nextWorld >= 2 ? _sFruit[7] : _sFruit[3];
-            Sprite[] icons = { _uCoins ? _uCoins : _sCoin, _sJuice, _sFruit[nextWorld >= 2 ? 3 : 0], _uWaiter ? _uWaiter : _sHeart, nextIcon ? nextIcon : _sStar };
+            string[] names = { "Total earnings", "Juice produced", "Fruit harvested", "Customers served", nextWorld < 0 ? "Worlds completed" : "Expansion unlocked" };
+            var nextIcon = nextWorld < 0 ? (_uCrown ? _uCrown : _sCrown) : nextWorld >= 2 ? _sFruit[7] : _sFruit[3];
+            Sprite[] icons = { _uCoins ? _uCoins : _sCoin, _sJuice, _sFruit[nextWorld < 0 ? 7 : nextWorld >= 2 ? 3 : 0], _uWaiter ? _uWaiter : _sHeart, nextIcon ? nextIcon : _sStar };
             var values = new TextMeshProUGUI[names.Length];
             var rowsRt = new RectTransform[names.Length];
             for (int i = 0; i < names.Length; i++)

@@ -64,6 +64,21 @@ namespace JuiceKing
             }
         }
 
+        /// <summary>Switch to another product (the one wanted can no longer be made). Only before anything was handed over.</summary>
+        public void ChangeOrder(FruitKind kind, int count)
+        {
+            if (got > 0 || kind == want) return;
+            want = kind;
+            wantCount = Mathf.Max(1, count);
+            _wait = 0f;
+            if (bubble != null)
+            {
+                bubble.SetOrder(_mgr.line == ProductLine.Cake ? GameRefs.I.CakeIcon(kind) : GameRefs.I.fruitIcons[(int)kind], wantCount);
+                bubble.SetPatience(0f);
+                if (bubble.gameObject.activeInHierarchy) Tweener.Punch(bubble.transform, 0.25f, 0.3f, _bubbleScale);
+            }
+        }
+
         public void Give(StackItem juice)
         {
             got++;

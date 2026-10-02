@@ -93,14 +93,14 @@ namespace JuiceKing
 
         /// <summary>Enough input waiting and room for the result.</summary>
         protected virtual bool CanStart() =>
-            outputPile != null && outputPile.HasSpace && inputPile != null && inputPile.CountReady(Accepts) >= InputPerBatch;
+            outputPile != null && outputPile.HasSpace && inputPile != null && inputPile.CountReady(InputType) >= InputPerBatch;
 
         /// <summary>Consume the batch (fly the inputs into the machine) and start the timer.</summary>
         protected virtual void Begin()
         {
             for (int i = 0; i < InputPerBatch; i++)
             {
-                var s = inputPile.TakeLast(Accepts);
+                var s = inputPile.TakeLast(InputType);
                 if (s == null) break;
                 s.inTransit = true;
                 var target = intakePoint != null ? intakePoint : transform;

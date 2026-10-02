@@ -18,6 +18,8 @@ namespace JuiceKing
         public TextMeshProUGUI label;
         public GameObject adBadge;
         [NonSerialized] public float wiggleT;
+        // Last value written to the label (text only changes when the shown number does).
+        [NonSerialized] public int shown = int.MinValue;
     }
 
     /// <summary>
@@ -41,6 +43,7 @@ namespace JuiceKing
         bool _shown;
         bool _assistShown;
         float _assistShownAt;
+        long _assistShownValue = -1;
 
         void Start()
         {
@@ -95,7 +98,12 @@ namespace JuiceKing
                         b.ring.enabled = active;
                         b.ring.fillAmount = Mathf.Clamp01(rem / Boosts.Duration(k));
                     }
-                    b.label.text = active ? Boosts.FormatTime(rem) : (b.kind == BoostButtonKind.Cash2x ? "2x CASH" : "TURBO");
+                    int key = active ? Mathf.CeilToInt(rem) : -1;
+                    if (key != b.shown)
+                    {
+                        b.shown = key;
+                        b.label.text = active ? Boosts.FormatTime(rem) : (b.kind == BoostButtonKind.Cash2x ? "2x CASH" : "TURBO");
+                    }
                     available = Ads.IsReady;
                     if (b.adBadge != null) b.adBadge.SetActive(!active);
                     break;
@@ -104,7 +112,12 @@ namespace JuiceKing
                 {
                     float cd = Boosts.FreeCashCooldown;
                     available = cd <= 0f && Ads.IsReady;
-                    b.label.text = cd > 0f ? Boosts.FormatTime(cd) : "+$" + UnlockZone.Format(FreeCashAmount());
+                    int key = cd > 0f ? -Mathf.CeilToInt(cd) - 1 : FreeCashAmount();
+                    if (key != b.shown)
+                    {
+                        b.shown = key;
+                        b.label.text = cd > 0f ? Boosts.FormatTime(cd) : "+$" + UnlockZone.Format(key);
+                    }
                     if (b.ring != null)
                     {
                         b.ring.enabled = cd > 0f;
@@ -142,11 +155,11 @@ namespace JuiceKing
             switch (b.kind)
             {
                 case BoostButtonKind.Cash2x:
-                    OfferPopup.I.Show("2x CASH", $"Double all sales for <b>{Boosts.FormatTime(Balance.CashBoostSeconds)}</b>!", cashIcon,
+                    OfferPopup.I.Show("2x CASH", $"Double all sales for <b>{Boosts.FormatTime(Balance.CashBoostSeconds)}</b> of play!", cashIcon,
                         "WATCH", true, () => Ads.ShowRewarded(Ads.PlacementCash2x, () => GrantBoost(BoostKind.Cash2x, b)));
                     break;
                 case BoostButtonKind.Turbo:
-                    OfferPopup.I.Show("TURBO", $"Run faster, juice faster and get more customers for <b>{Boosts.FormatTime(Balance.TurboSeconds)}</b>!", turboIcon,
+                    OfferPopup.I.Show("TURBO", $"Run faster, make drinks faster and get more customers for <b>{Boosts.FormatTime(Balance.TurboSeconds)}</b> of play!", turboIcon,
                         "WATCH", true, () => Ads.ShowRewarded(Ads.PlacementTurbo, () => GrantBoost(BoostKind.Turbo, b)));
                     break;
                 default:
@@ -191,8 +204,8 @@ namespace JuiceKing
             var z = UnlockZone.Current;
             if (z == null || z.IsUnlocked || !Ads.IsReady || Boosts.AssistCooldown > 0f) return null;
             if (z.StuckTime < 0.8f) return null;
-            // Only for the last stretch so ads never replace the core loop.
-            if (z.Remaining > Mathf.Max(60, z.price / 2)) return null;
+            // Only for the last stretch (about one Free Cash bag) so ads never replace the core loop.
+            if (z.Remaining > Economy.UnlockAssistMax(z.price, GameManager.I.UnlockedCount)) return null;
             return z;
         }
 
@@ -216,7 +229,12 @@ namespace JuiceKing
                     if (!_assistShown) assistRect.gameObject.SetActive(false);
                 });
             }
-            if (show && assistText != null) assistText.text = "FINISH  $" + UnlockZone.Format(z.Remaining);
+            if (show && assistText != null && z.Remaining != _assistShownValue)
+            {
+                _assistShownValue = z.Remaining;
+                assistText.text = "FINISH  $" + UnlockZone.Format(z.Remaining);
+            }
+            if (!show) _assistShownValue = -1;
             if (show && Time.time - _assistShownAt > 0.45f)
             {
                 float s = 1f + Mathf.Sin(Time.time * 6f) * 0.04f;
@@ -243,15 +261,32 @@ namespace JuiceKing
         {
             var gm = GameManager.I;
             long amount = gm.OfflineEarnings();
-            gm.ConsumeOffline();
-            if (amount < 10 || OfferPopup.I == null) return;
+            // Parked in the save until collected: closing the app with the card up keeps it, and it pays only once.
+            gm.ConsumeOffline(amount);
+            if (amount < 10 || OfferPopup.I == null)
+            {
+                if (amount > 0) ClaimOffline(amount, false);
+                return;
+            }
             Tweener.Delay(0.6f, () =>
             {
+                bool adReady = Ads.IsReady;
                 OfferPopup.I.Show("WELCOME BACK!", $"Your helpers made\n<size=140%><color=#2E9E3E>${UnlockZone.Format(amount)}</color></size>\nwhile you were away.",
-                    freeCashIcon, "x2", true,
-                    () => Ads.ShowRewarded(Ads.PlacementOffline, () => GiveCash((int)(amount * 2), ScreenCenter), () => GiveCash((int)amount, ScreenCenter)),
-                    "Collect", () => GiveCash((int)amount, ScreenCenter));
+                    freeCashIcon, adReady ? "COLLECT x2" : "COLLECT", adReady,
+                    adReady
+                        ? () => Ads.ShowRewarded(Ads.PlacementOffline, () => ClaimOffline(amount * 2, true), () => ClaimOffline(amount, false))
+                        : (Action)(() => ClaimOffline(amount, false)),
+                    adReady ? "Collect" : null, () => ClaimOffline(amount, false));
             });
+        }
+
+        static void ClaimOffline(long amount, bool doubled)
+        {
+            var gm = GameManager.I;
+            if (gm == null || gm.data.offlinePending <= 0) return;
+            gm.ClaimOffline(doubled);
+            GiveCash((int)Math.Min(amount, int.MaxValue), ScreenCenter);
+            gm.Save();
         }
     }
 }

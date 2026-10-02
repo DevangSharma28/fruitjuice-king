@@ -52,14 +52,25 @@ namespace JuiceKing
 
         void Update()
         {
-            if (_offered || _leaving || nextExpansion < 0 || completionPopup == null) return;
+            if (_offered || _leaving || completionPopup == null) return;
+            // The last world celebrates once (its reward is a one-time grant).
+            if (nextExpansion < 0 && GameManager.I.data.world2Complete) return;
             _checkT -= Time.unscaledDeltaTime;
             if (_checkT > 0f) return;
             _checkT = 1f;
             if (!IsComplete()) return;
-            // Let the last unlock / upgrade celebration finish first.
             _offered = true;
-            Tweener.Delay(2.2f, ShowCompletion);
+            Analytics.Log(Analytics.WorldComplete, "next", nextExpansion);
+            StartCoroutine(ShowWhenClear());
+        }
+
+        /// <summary>Let the last unlock / upgrade celebration finish and wait for other popups to close.</summary>
+        System.Collections.IEnumerator ShowWhenClear()
+        {
+            yield return new WaitForSeconds(2.2f);
+            while (Platform.Paused || ExpansionIntro.Playing || CameraFollow.Busy || (UpgradePanel.I != null && UpgradePanel.I.IsOpen))
+                yield return null;
+            ShowCompletion();
         }
 
         /// <summary>Every pad of this world is unlocked and every upgrade is maxed.</summary>
@@ -87,7 +98,25 @@ namespace JuiceKing
         {
             if (_leaving || completionPopup == null) return;
             if (nextWorldButton != null) nextWorldButton.SetActive(false);
+            if (nextExpansion < 0)
+            {
+                completionPopup.Show(GameManager.I.data.stats, -1, ClaimFinal, ClaimFinal);
+                return;
+            }
             completionPopup.Show(GameManager.I.data.stats, nextExpansion, () => EnterExpansion(nextExpansion), OnStay);
+        }
+
+        /// <summary>The last world is done: a one-time Golden Apple reward, then the player keeps playing.</summary>
+        void ClaimFinal()
+        {
+            var gm = GameManager.I;
+            if (gm == null || gm.data.world2Complete) return;
+            gm.data.world2Complete = true;
+            gm.Save();
+            var p = GameRefs.I != null && GameRefs.I.player != null ? GameRefs.I.player.transform.position + Vector3.up * 2f : Vector3.zero;
+            AppleFx.Reward(p, Economy.ApplesFinalCompletion);
+            Fx.Confetti(p, 80);
+            Haptics.Play(HapticKind.Success);
         }
 
         void OnStay()
@@ -102,14 +131,15 @@ namespace JuiceKing
         {
             if (_leaving) return;
             _leaving = true;
-            InputJoystick.Blocked = true;
+            InputJoystick.Block("expansion", true);
             Sfx.Play(SfxId.Whoosh, 0.5f, 0.8f);
+            Analytics.Log(Analytics.WorldEnter, "to", expansion);
             ScreenFader.FadeOut(0.8f, () =>
             {
                 GameManager.I.BeginExpansion(expansion, Economy.StartMoney(expansion));
                 // A little premium welcome for every new world.
                 GameManager.I.AddApples(expansion >= 2 ? 5 : 3);
-                InputJoystick.Blocked = false;
+                InputJoystick.Block("expansion", false);
                 // The loading screen takes over from the black fade and brings up the new world.
                 LoadingScreen.LoadSavedWorld();
             });

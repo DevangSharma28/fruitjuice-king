@@ -32,7 +32,9 @@ namespace JuiceKing
         [Tooltip("Seconds of play after the tutorial before the first (scripted) raid.")]
         public float firstDelay = 50f;
 
-        public const string AdPlacement = "fox_restore";
+        public const string AdPlacement = Ads.PlacementFoxRestore;
+        [Tooltip("Seconds of warning (toast, yip) before a regular raid starts.")]
+        public float warnLead = 7f;
 
         readonly Dictionary<FruitField, float> _timers = new Dictionary<FruitField, float>();
         bool _raiding;
@@ -40,6 +42,8 @@ namespace JuiceKing
         float _saveT;
         Coroutine _routine;
         Farm _current;
+        Farm _warned;
+        readonly List<Farm> _options = new List<Farm>(4);
 
         public bool Raiding => _raiding;
 
@@ -53,12 +57,16 @@ namespace JuiceKing
 
             // Farms still recovering from a raid (time away counts towards regrowth).
             var d = GameManager.I.data;
-            float away = (float)System.Math.Min(GameManager.I.AwaySeconds, 3600.0);
-            for (int i = 0; i < d.foxKinds.Count && i < d.foxTimers.Count; i++)
+            // The measured absence (not the offline-earnings counter, which the Welcome Back card consumes).
+            float away = (float)System.Math.Min(GameManager.I.LoadedAwaySeconds, 3600.0);
+            // MarkDamaged rewrites the saved lists: iterate over a copy.
+            var kinds = new List<int>(d.foxKinds);
+            var timers = new List<float>(d.foxTimers);
+            for (int i = 0; i < kinds.Count && i < timers.Count; i++)
             {
-                var farm = FarmOf((FruitKind)d.foxKinds[i]);
+                var farm = FarmOf((FruitKind)kinds[i]);
                 if (farm == null) continue;
-                float left = d.foxTimers[i] - away;
+                float left = timers[i] - away;
                 if (left > 1f) MarkDamaged(farm, left, false);
             }
             SyncSave();
@@ -109,6 +117,7 @@ namespace JuiceKing
                 }
             }
 
+            if (LoadingScreen.Busy || gm.data.expansion != 2) return;
             _saveT += dt;
             if (_saveT > 1f)
             {
@@ -116,8 +125,8 @@ namespace JuiceKing
                 SyncSave();
             }
 
-            if (_raiding || ExpansionIntro.Playing || CameraFollow.Busy || LoadingScreen.Busy) return;
-            if (gm.TutorialStep < 6) return;
+            if (_raiding || ExpansionIntro.Playing || CameraFollow.Busy) return;
+            if (gm.TutorialStep < Tutorial.FreePlayStep) return;
 
             var d = gm.data;
             if (!d.foxIntroSeen)
@@ -132,15 +141,32 @@ namespace JuiceKing
                 return;
             }
 
-            // Regular raids: one farm at a time, never while one is still damaged.
-            if (_timers.Count > 0) return;
+            // Regular raids: one farm at a time, never while one is still damaged, and the clock stops while a menu
+            // is open so the player always sees it coming.
+            if (_timers.Count > 0 || PopupOpen()) return;
             d.foxNext -= dt;
+            if (_warned == null && d.foxNext <= warnLead)
+            {
+                _warned = PickFarm();
+                if (_warned == null) d.foxNext = 30f;
+                else Warn(_warned);
+            }
             if (d.foxNext <= 0f)
             {
-                var farm = PickFarm();
+                var farm = _warned != null && IsTarget(_warned) ? _warned : PickFarm();
+                _warned = null;
                 d.foxNext = farm != null ? Economy.FoxInterval : 30f;
                 if (farm != null) StartRaid(farm, false);
             }
+        }
+
+        /// <summary>Telegraph: a few seconds before a raid the player hears and reads that the fox is coming.</summary>
+        void Warn(Farm farm)
+        {
+            Sfx.Play(SfxId.Yip, 0.45f, 1.35f);
+            Haptics.Play(HapticKind.Warning);
+            if (HUD.I != null)
+                HUD.I.Toast("A fox is sneaking toward the " + Name(farm) + "!", GameRefs.I != null ? GameRefs.I.foxIcon : null, 3f);
         }
 
         static readonly List<FruitField> _keys = new List<FruitField>();
@@ -150,14 +176,36 @@ namespace JuiceKing
             (UpgradePanel.I != null && UpgradePanel.I.IsOpen) || (DeliveryPopup.I != null && DeliveryPopup.I.IsOpen) ||
             (ShopPopup.I != null && ShopPopup.I.IsOpen);
 
-        /// <summary>A random open, healthy farm (the fox prefers the one the player is not standing in).</summary>
+        bool IsTarget(Farm f) => f != null && f.field != null && f.field.isActiveAndEnabled && !f.field.Damaged;
+
+        /// <summary>
+        /// A random open, healthy farm, preferring one the player is not standing in. The fox never takes the last
+        /// healthy farm: with a single open farm a raid would stop every sale, so it waits until a second one opens.
+        /// </summary>
         Farm PickFarm()
         {
-            var options = new List<Farm>();
+            _options.Clear();
             foreach (var f in farms)
-                if (f.field != null && f.field.isActiveAndEnabled && !f.field.Damaged) options.Add(f);
-            if (options.Count == 0) return null;
-            return options[Random.Range(0, options.Count)];
+                if (IsTarget(f)) _options.Add(f);
+            if (_options.Count < 2) return null;
+            var pl = GameRefs.I != null ? GameRefs.I.player : null;
+            if (pl != null && _options.Count > 2)
+            {
+                // Drop the farm right under the player (the fox is sneaky, not suicidal).
+                Farm nearest = null;
+                float best = 36f;
+                foreach (var f in _options)
+                {
+                    float dd = (f.field.Center - pl.transform.position).sqrMagnitude;
+                    if (dd < best)
+                    {
+                        best = dd;
+                        nearest = f;
+                    }
+                }
+                if (nearest != null) _options.Remove(nearest);
+            }
+            return _options[Random.Range(0, _options.Count)];
         }
 
         // ---------------------------------------------------------------- raids
@@ -167,6 +215,8 @@ namespace JuiceKing
             _raiding = true;
             _current = farm;
             GameManager.I.data.stats.foxRaids++;
+            Analytics.Log(Analytics.FoxRaid, "farm", farm.field.kind.ToString(), "first", cinematic);
+            if (!cinematic) Haptics.Play(HapticKind.Warning);
             if (!cinematic && HUD.I != null)
                 HUD.I.Toast("A fox is raiding the " + Name(farm) + "!", GameRefs.I != null ? GameRefs.I.foxIcon : null, 3f);
             _routine = StartCoroutine(RaidRoutine(farm, cinematic));
@@ -313,13 +363,16 @@ namespace JuiceKing
                 : refs.foxIcon;
             PremiumPopup.I.Show("FOX ATTACK!", Name(farm) + " is damaged. " + body, icon,
                 Economy.ApplesRestoreFarm, () => "Regrows in " + Clock(TimeLeft(field)),
-                () => Restore(field, true), AdPlacement, () => Restore(field, true));
+                () => Restore(field, true, "apples"), AdPlacement, () => Restore(field, true, "ad"),
+                () => _timers.ContainsKey(field));
         }
 
-        public void Restore(FruitField field, bool instant)
+        public void Restore(FruitField field, bool instant, string how = "regrow")
         {
             if (field == null || !_timers.ContainsKey(field)) return;
             _timers.Remove(field);
+            Analytics.Log(Analytics.FoxRecovery, "farm", field.kind.ToString(), "how", how);
+            if (instant) Haptics.Play(HapticKind.Success);
             field.SetDamaged(false, instant ? 0.12f : 0.3f);
             var farm = FarmOf(field);
             if (farm != null && farm.restorePad != null)

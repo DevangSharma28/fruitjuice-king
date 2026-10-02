@@ -139,9 +139,8 @@ namespace JuiceKing.EditorTools
         [MenuItem("Juice King/Reset Save Data", priority = 20)]
         public static void ResetSave()
         {
-            PlayerPrefs.DeleteKey("juiceking_save_v1");
-            PlayerPrefs.DeleteKey(GameManager.DebugWorldsKey);
-            PlayerPrefs.Save();
+            // The PlayerPrefs save, the debug world slots and the backup file (persistentDataPath).
+            GameManager.DeleteSaveFiles();
             Debug.Log("[JuiceKing] Save data cleared");
         }
 
@@ -254,6 +253,7 @@ namespace JuiceKing.EditorTools
             var zPineField = Unlock("pine_field", "Pineapple Field", 350, new Vector3(0f, 0f, 15.2f), _sFruit[2], new[] { pineField.transform.parent.gameObject }, zFarmerOrange);
             var zPineJuicer = Unlock("pine_juicer", "Pineapple Juicer", 250, pineJuicer.transform.position, _uMachine, new[] { pineJuicer.gameObject }, zPineField);
             var zPatio = Unlock("patio", "Cozy Patio", 150, patio.transform.position, _uStar, new[] { patio });
+            zPatio.subtitle = "Charm: customers pay +10%";
             var zWaiter = Unlock("hire_waiter", "Hire Waiter", 180, new Vector3(7.6f, 0f, -4.2f), _uWaiter, new[] { waiter }, zPineJuicer, zPatio);
             var zMelonMore = Unlock("melon_more", "More Melons", 120, new Vector3(6.5f, 0f, 11.6f), _sFruit[1], new[] { melonMore });
             var zMelonField = Unlock("melon_field", "Watermelon Field", 100, new Vector3(6.5f, 0f, 7.2f), _sFruit[1], new[] { melonField.transform.parent.gameObject }, zWaiter, zMelonMore);
@@ -928,6 +928,18 @@ namespace JuiceKing.EditorTools
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
             PlayerSettings.SetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget.Android, ManagedStrippingLevel.Low);
             PlayerSettings.SetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget.iOS, ManagedStrippingLevel.Low);
+            // Store builds: Play needs an App Bundle; Android 7.0+ (Unity IAP 5). iOS keeps the engine's minimum (15.0 in Unity 6.4).
+            EditorUserBuildSettings.buildAppBundle = true;
+            // Never lower the engine's own minimum (API 25 in Unity 6.4); only raise older projects.
+            if ((int)PlayerSettings.Android.minSdkVersion < (int)AndroidSdkVersions.AndroidApiLevel24)
+                PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
+            PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
+            // The bundle identifier is the owner's to choose (RELEASE_CHECKLIST.md): applied only once it is set.
+            if (!string.IsNullOrEmpty(ReleaseConfig.BundleIdentifier))
+            {
+                PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, ReleaseConfig.BundleIdentifier);
+                PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.iOS, ReleaseConfig.BundleIdentifier);
+            }
             EditorSettings.spritePackerMode = SpritePackerMode.SpriteAtlasV2;
             BuildSpriteAtlas();
 

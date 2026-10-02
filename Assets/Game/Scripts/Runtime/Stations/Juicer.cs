@@ -82,6 +82,8 @@ namespace JuiceKing
         public int Available => outputPile.Count;
         public ItemType OutputType => ItemTypes.Juice(kind);
         public StackItem Take(Carrier to) => outputPile.TakeLast();
+        /// <summary>A batch is blending right now.</summary>
+        public bool Working => _working;
 
         void Update()
         {
@@ -90,11 +92,12 @@ namespace JuiceKing
             int need = Balance.SlicesPerJuice[(int)kind];
             var col = Balance.JuiceColors[(int)kind];
 
-            if (!_working && outputPile.HasSpace && inputPile.CountReady(Accepts) >= need)
+            var slice = ItemTypes.Slice(kind);
+            if (!_working && outputPile.HasSpace && inputPile.CountReady(slice) >= need)
             {
                 for (int i = 0; i < need; i++)
                 {
-                    var s = inputPile.TakeLast(Accepts);
+                    var s = inputPile.TakeLast(slice);
                     if (s == null) break;
                     s.inTransit = true;
                     Tweener.Arc(s.transform, () => intakePoint.position, 0.8f, 0.25f, () =>

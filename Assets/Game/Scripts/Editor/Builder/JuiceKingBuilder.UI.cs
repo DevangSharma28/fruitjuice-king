@@ -445,16 +445,19 @@ namespace JuiceKing.EditorTools
             var tIconImg = Img(tIcon, _sFruit[0], Color.white);
             var tWarn = UIRect("Warn", toast, new Vector2(1f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-66f, 4f), new Vector2(80f, 72f));
             Img(tWarn, _uWarning ? _uWarning : _sStar, Color.white);
-            var tText = Label(Stretch("Text", toast, 132f, 118f, 16f, 22f), "", 40f, UiInk, TextAlignmentOptions.Center, false);
+            var tText = Label(Stretch("Text", toast, 132f, 118f, 14f, 20f), "", 40f, UiInk, TextAlignmentOptions.Center, false);
+            // Long messages wrap onto two lines instead of running under the icon.
+            tText.textWrappingMode = TextWrappingModes.Normal;
             tText.enableAutoSizing = true;
-            tText.fontSizeMin = 26f;
-            tText.fontSizeMax = 40f;
+            tText.fontSizeMin = 24f;
+            tText.fontSizeMax = 38f;
             hud.toastPanel = toast;
             hud.toastText = tText;
             hud.toastIcon = tIconImg;
 
             // Off-screen target indicator (rotated to point at the target, clamped to the screen edge).
-            var edgeArea = Stretch("GuideEdge", safe);
+            // Inset so the arrow never sits on the top bar / objective plank or under the boost column on the right.
+            var edgeArea = Stretch("GuideEdge", safe, 24f, 214f, 330f, 70f);
             var edge = UIRect("Arrow", edgeArea, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(120f, 138f));
             Img(edge, _uArrowUp ? _uArrowUp : _sPlay, Color.white);
             _edgeArrow = edge;
@@ -546,7 +549,7 @@ namespace JuiceKing.EditorTools
             setDim.transition = Selectable.Transition.None;
             // The DEBUG row adds debugH; SettingsPopup removes it again in release builds.
             const float debugH = 220f;
-            var sw = UIRect("Window", setRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 60f), new Vector2(780f, 640f + debugH));
+            var sw = UIRect("Window", setRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(780f, 930f + debugH));
             Sliced(sw, _uPanelPlain ? _uPanelPlain : _sPanel, panelScale, null, true);
             Label(UIRect("Title", sw, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, plankY), new Vector2(460f, 100f)),
                 "SETTINGS", 56f, Color.white, TextAlignmentOptions.Center, true);
@@ -563,10 +566,29 @@ namespace JuiceKing.EditorTools
                 tg.gameObject.AddComponent<UIPress>();
                 return img;
             }
-            var sndImg = Toggle("Sound", -300f, out var sndBtn);
-            var ambImg = Toggle("Ambience", -470f, out var ambBtn);
+            var sndImg = Toggle("Sound", -290f, out var sndBtn);
+            var ambImg = Toggle("Ambience", -440f, out var ambBtn);
+            var vibImg = Toggle("Vibration", -590f, out var vibBtn);
+            // Text links: restore purchases (App Store requirement) and privacy (shown once a policy / CMP exists).
+            Button Link(string name, string text, float x, float w)
+            {
+                var r = UIRect(name, sw, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(x, -715f), new Vector2(w, 84f));
+                var bg = Sliced(r, _uCard ? _uCard : _sPanel, 1.1f, new Color(1f, 0.97f, 0.9f), true);
+                var b = r.gameObject.AddComponent<Button>();
+                b.targetGraphic = bg;
+                r.gameObject.AddComponent<UIPress>();
+                var t = Label(Stretch("Text", r, 14f, 14f, 0f, 6f), text, 34f, UiInk, TextAlignmentOptions.Center, false);
+                t.enableAutoSizing = true;
+                t.fontSizeMin = 22f;
+                t.fontSizeMax = 34f;
+                return b;
+            }
+            var restoreBtn = Link("Restore", "Restore Purchases", -142f, 330f);
+            var privacyBtn = Link("Privacy", "Privacy", 188f, 250f);
+            var version = Label(UIRect("Version", sw, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -800f), new Vector2(560f, 50f)),
+                "v" + Application.version, 30f, new Color(0.55f, 0.42f, 0.34f, 0.8f), TextAlignmentOptions.Center, false);
             // DEBUG: jump to any world (Editor and development builds only).
-            var dbg = UIRect("Debug", sw, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -560f), new Vector2(620f, 190f));
+            var dbg = UIRect("Debug", sw, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -850f), new Vector2(620f, 190f));
             Sliced(dbg, _uCard ? _uCard : _sPanel, 1.3f, new Color(0.85f, 0.92f, 1f));
             Label(UIRect("Label", dbg, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -40f), new Vector2(560f, 50f)),
                 "DEBUG: SWITCH WORLD", 36f, new Color(0.25f, 0.35f, 0.6f), TextAlignmentOptions.Center, false);
@@ -595,6 +617,11 @@ namespace JuiceKing.EditorTools
             settings.ambienceToggle = ambImg;
             settings.soundButton = sndBtn;
             settings.ambienceButton = ambBtn;
+            settings.vibrationToggle = vibImg;
+            settings.vibrationButton = vibBtn;
+            settings.restoreButton = restoreBtn;
+            settings.privacyButton = privacyBtn;
+            settings.versionText = version;
             settings.toggleOn = _uToggleOn;
             settings.toggleOff = _uToggleOff;
             settings.debugRoot = dbg.gameObject;
@@ -604,7 +631,7 @@ namespace JuiceKing.EditorTools
             // ---------------- expansion: delivery card, world-complete popup, intro overlay
             _uiDelivery = world >= 1 ? BuildDeliveryHUD(safe) : null;
             _uiNextWorld = world <= 1 ? BuildNextWorldButton(safe, world + 1) : null;
-            _uiCompletion = world <= 1 ? BuildCompletionPopup(root, world + 1) : null;
+            _uiCompletion = BuildCompletionPopup(root, world <= 1 ? world + 1 : -1);
             if (world >= 1) BuildDeliveryPopup(root);
             _uiIntro = world >= 1 ? BuildIntroOverlay(root) : null;
             _uiFox = world >= 2 ? BuildFoxHUD(safe) : null;

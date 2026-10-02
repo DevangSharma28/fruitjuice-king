@@ -415,6 +415,10 @@ namespace JuiceKing.EditorTools
                 ("mixspeed", _uRocket ? _uRocket : _sTurbo), ("mixout", _sCups), ("mixcap", _uMachine ? _uMachine : _sJuice),
                 ("truckreward", _uCoins ? _uCoins : _sCash2x), ("trucksize", _sTruck), ("truckfreq", _sClock), ("premium", _uCrown ? _uCrown : _sCrown),
                 ("carryspeed", _sSneaker), ("wspeed", _uFarmer ? _uFarmer : _sWorker), ("wcarry", _uWaiter ? _uWaiter : _sWorker), ("offline", _sMoon),
+                // Berry Blast: fox defences and the bakery tab.
+                ("foxfence", _sFox ? _sFox : _sStar), ("foxcare", _sHeart ? _sHeart : _sSprout),
+                ("bakespeed", _sOven ? _sOven : _sStar), ("bakecap", _sCakeIcons[8] ? _sCakeIcons[8] : _sStar),
+                ("cakeprice", _sCakeIcons[7] ? _sCakeIcons[7] : _sPrice), ("cakecase", _sCakeShop ? _sCakeShop : _sStar),
             };
             keys = new string[map.Length];
             sprites = new Sprite[map.Length];

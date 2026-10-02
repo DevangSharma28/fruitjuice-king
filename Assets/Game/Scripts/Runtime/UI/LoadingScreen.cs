@@ -39,6 +39,8 @@ namespace JuiceKing
         public float fadeOutTime = 0.6f;
         [TextArea] public string[] tips;
 
+        static readonly string[] LoadingTexts = { "LOADING", "LOADING.", "LOADING..", "LOADING..." };
+        int _dots = -1;
         float _shown, _target, _t0;
         int _pct = -1;
         int _tip = -1;
@@ -162,7 +164,11 @@ namespace JuiceKing
             if (statusText != null)
             {
                 int dots = (int)(t * 2.5f) % 4;
-                statusText.text = "LOADING" + new string('.', dots);
+                if (dots != _dots)
+                {
+                    _dots = dots;
+                    statusText.text = LoadingTexts[dots];
+                }
             }
 
             if (tipText != null && tips != null && tips.Length > 0)

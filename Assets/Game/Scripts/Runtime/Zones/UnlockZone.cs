@@ -51,6 +51,7 @@ namespace JuiceKing
         Vector3 _baseScale;
         Vector3 _labelBase;
         float _glowScale = 1f;
+        int _shownRemaining = -1;
 
         /// <summary>Seconds the player has been standing here unable to pay (drives the ad offer).</summary>
         public float StuckTime => _stuckTime;
@@ -154,6 +155,14 @@ namespace JuiceKing
         protected override float TickCarrier(Carrier c, float timer)
         {
             if (IsUnlocked || timer < 0.35f) return timer;
+            // Already paid in full (a price lowered by a balance update after the player paid): open it.
+            if (Paid >= price)
+            {
+                Unlock();
+                return timer;
+            }
+            // No spending while a popup or ad is up: the player is frozen on the pad, not choosing to pay.
+            if (Platform.Paused) return timer;
             var gm = GameManager.I;
             if (gm.Money <= 0)
             {
@@ -169,7 +178,7 @@ namespace JuiceKing
             int want = Mathf.FloorToInt(_acc);
             if (want <= 0) return timer;
             _acc -= want;
-            int pay = (int)Mathf.Min(want, price - Paid, gm.Money);
+            int pay = (int)System.Math.Min(System.Math.Min((long)want, (long)(price - Paid)), gm.Money);
             if (pay <= 0) return timer;
 
             gm.AddMoney(-pay);
@@ -207,9 +216,14 @@ namespace JuiceKing
         void RefreshVisual()
         {
             int remaining = Remaining;
-            if (priceText != null) priceText.text = "$" + Format(remaining);
-            if (groundPriceText != null) groundPriceText.text = Format(remaining);
-            if (titleText != null) titleText.text = title;
+            // Texts only change with the amount shown (TMP rebuilds its mesh on every assignment).
+            if (remaining != _shownRemaining)
+            {
+                _shownRemaining = remaining;
+                if (priceText != null) priceText.text = "$" + Format(remaining);
+                if (groundPriceText != null) groundPriceText.text = Format(remaining);
+                if (titleText != null && titleText.text != title) titleText.text = title;
+            }
             if (radialFill != null) radialFill.fillAmount = price <= 0 ? 1f : Mathf.Clamp01(Paid / (float)price);
             if (fill != null)
             {
@@ -234,6 +248,8 @@ namespace JuiceKing
             IsUnlocked = true;
             if (Current == this) Current = null;
             GameManager.I.MarkUnlocked(id);
+            Analytics.Log(Analytics.Unlock, "id", id, "price", price, "count", GameManager.I.UnlockedCount);
+            Haptics.Play(HapticKind.Medium);
             Sfx.Play(SfxId.Unlock, 0.8f);
             Sfx.Play(SfxId.Sparkle, 0.4f);
 

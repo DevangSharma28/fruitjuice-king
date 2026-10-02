@@ -94,7 +94,7 @@ namespace JuiceKing
             {
                 truck = def.kind,
                 line = line,
-                client = line == ProductLine.Cake ? CakeClients[Random.Range(0, CakeClients.Length)] : def.clients[Random.Range(0, def.clients.Length)],
+                client = line == ProductLine.Cake ? CakeClients[Random.Range(0, CakeClients.Length)] : ClientFor(def, kinds),
                 // Newer juices a bit more often so fresh unlocks matter.
                 kind = kinds[Random.value < 0.35f ? kinds.Count - 1 : Random.Range(0, kinds.Count)],
             };
@@ -108,6 +108,22 @@ namespace JuiceKing
         }
 
         static readonly string[] CakeClients = { "BIRTHDAY PARTY", "WEDDING", "TEA ROOM", "SCHOOL FAIR", "BAKERY CAFE", "VILLAGE FETE" };
+
+        // The Berry Blast is a country village, not a beach: its juice clients match (index = truck kind).
+        static readonly string[][] BerryClients =
+        {
+            new[] { "FARM STALL", "MILK BAR", "PICNIC CLUB", "ICE CREAM CART" },
+            new[] { "VILLAGE CAFE", "BERRY FAIR", "SCHOOL CANTEEN", "COUNTRY INN" },
+            new[] { "SUMMER FESTIVAL", "COUNTRY HOTEL", "GARDEN SHOW", "MARKET DAY" },
+            new[] { "ROYAL BANQUET", "BERRY QUEEN'S BALL", "MANOR HOUSE", "GRAND GALA" },
+        };
+
+        static string ClientFor(TruckDef def, IReadOnlyList<FruitKind> kinds)
+        {
+            bool berry = kinds.Count > 0 && kinds[0].IsBerry();
+            var list = berry ? BerryClients[(int)def.kind] : def.clients;
+            return list[Random.Range(0, list.Length)];
+        }
 
         /// <summary>~2x the shop value of the same cups, times the truck bonus and the Truck Reward upgrade, rounded nicely.</summary>
         public static long Reward(DeliveryOrder o)

@@ -26,6 +26,17 @@ namespace JuiceKing
 
         public static bool GameplayRunning => _started && Pauses.Count == 0;
 
+        /// <summary>A popup, menu or ad is on screen (regardless of first input).</summary>
+        public static bool Paused => Pauses.Count > 0;
+
+        /// <summary>A new scene starts unpaused: drops reasons left behind by popups of the scene that was unloaded.</summary>
+        public static void ResetPauses()
+        {
+            bool was = GameplayRunning;
+            Pauses.Clear();
+            if (!was && GameplayRunning) GameplayStarted?.Invoke();
+        }
+
         /// <summary>Call once the first frame of gameplay is visible.</summary>
         public static void NotifyLoaded()
         {

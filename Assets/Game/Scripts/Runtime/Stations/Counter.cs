@@ -86,17 +86,9 @@ namespace JuiceKing
 
         public ItemType ProductOf(FruitKind k) => ItemTypes.Product(line, k);
 
-        public bool Has(FruitKind k)
-        {
-            var want = ProductOf(k);
-            return display.Contains(t => t == want);
-        }
+        public bool Has(FruitKind k) => display.Contains(ProductOf(k));
 
         /// <summary>Hand one item of this kind to a customer (juice or cake, whatever this counter sells).</summary>
-        public StackItem TakeProduct(FruitKind k)
-        {
-            var want = ProductOf(k);
-            return display.TakeLast(t => t == want);
-        }
+        public StackItem TakeProduct(FruitKind k) => display.TakeLast(ProductOf(k));
     }
 }

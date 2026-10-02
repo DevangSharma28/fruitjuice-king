@@ -10,8 +10,21 @@ namespace JuiceKing
     {
         public static Vector2 Direction { get; private set; }
         public static bool IsTouching { get; private set; }
-        /// <summary>Set by popups / cinematics that freeze the player. Camera peeks also block input.</summary>
-        public static bool Blocked;
+        static readonly HashSet<string> Blocks = new HashSet<string>();
+
+        /// <summary>True while any popup / cinematic freezes the player (camera peeks also block input).</summary>
+        public static bool Blocked => Blocks.Count > 0;
+
+        /// <summary>Freeze or release the player for one reason ("shop", "intro"...). Overlapping popups each hold their
+        /// own key, so closing one never frees the player while another is still up.</summary>
+        public static void Block(string reason, bool on)
+        {
+            if (on) Blocks.Add(reason);
+            else Blocks.Remove(reason);
+        }
+
+        /// <summary>Drops every block (a new scene starts clean).</summary>
+        public static void ClearBlocks() => Blocks.Clear();
 
         public RectTransform area;
         public RectTransform baseRect;

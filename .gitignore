@@ -220,3 +220,7 @@ DerivedData/
 # Playgrounds
 timeline.xctimeline
 playground.xcworkspace
+# Unity: the package list must be versioned (the NuGet "packages" rules above would hide it).
+!/Packages/
+!/Packages/manifest.json
+!/Packages/packages-lock.json

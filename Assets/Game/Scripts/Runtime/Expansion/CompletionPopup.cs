@@ -43,22 +43,26 @@ namespace JuiceKing
             _open = true;
             _onEnter = onEnter;
             _onStay = onStay;
-            InputJoystick.Blocked = true;
+            InputJoystick.Block("completion", true);
             Platform.Pause("completion");
             gameObject.SetActive(true);
 
             int current = GameManager.I != null ? GameManager.I.data.expansion : 0;
-            titleText.text = current == 1 ? "TROPICAL TYCOON!" : "JUICE KING!";
-            subText.text = current == 1 ? "Your island juice empire is complete!" : "You built the ultimate juice shop!";
-            string world = nextWorld == 1 ? "TROPICAL FARM" : nextWorld == 2 ? "BERRY BLAST" : "NEW WORLD";
-            if (enterText != null) enterText.text = "ENTER " + world;
+            bool final = nextWorld < 0;
+            titleText.text = final ? "BERRY CAKE EMPIRE!" : current == 1 ? "TROPICAL TYCOON!" : "JUICE KING!";
+            subText.text = final ? "Every farm, oven and truck is yours! +" + Economy.ApplesFinalCompletion + " Golden Apples"
+                : current == 1 ? "Your island juice empire is complete!" : "You built the ultimate juice shop!";
+            string world = nextWorld == 1 ? "TROPICAL FARM" : nextWorld == 2 ? "BERRY BLAST" : final ? "ALL WORLDS DONE" : "NEW WORLD";
+            if (enterText != null) enterText.text = final ? "CLAIM REWARD" : "ENTER " + world;
+            if (stayButton != null) stayButton.gameObject.SetActive(!final);
+            Haptics.Play(HapticKind.Success);
 
             _targets[0] = s.earned;
             _targets[1] = s.juiceMade;
             _targets[2] = s.fruitHarvested;
             _targets[3] = s.customersServed;
             for (int i = 0; i < statValues.Length; i++)
-                if (statValues[i] != null) statValues[i].text = i < 4 ? "0" : world;
+                if (statValues[i] != null) statValues[i].text = i < 4 ? "0" : final ? ExpansionManager.WorldCount + " / " + ExpansionManager.WorldCount : world;
 
             Tweener.Scale(window, Vector3.one * 0.3f, Vector3.one, 0.55f, Ease.OutBack);
             if (crown != null) Tweener.Scale(crown, Vector3.zero, Vector3.one, 0.8f, Ease.OutElastic, null, 0.25f);
@@ -125,7 +129,7 @@ namespace JuiceKing
             if (!_open) return;
             _open = false;
             Platform.Resume("completion");
-            InputJoystick.Blocked = false;
+            InputJoystick.Block("completion", false);
             Sfx.Play(SfxId.Click, 0.5f);
             Tweener.Scale(window, Vector3.one, Vector3.one * 0.6f, 0.18f, Ease.InQuad, () =>
             {

@@ -137,7 +137,7 @@ namespace JuiceKing
             _cutscene = true;
             _onSkip = onSkip;
             gameObject.SetActive(true);
-            InputJoystick.Blocked = true;
+            InputJoystick.Block("cutscene", true);
             _barH = topBar != null ? topBar.sizeDelta.y : 0f;
             SlideBars(true);
             FadeHud(false);
@@ -158,7 +158,7 @@ namespace JuiceKing
             _done = true;
             _onSkip = null;
             CameraFollow.CancelPeeks();
-            InputJoystick.Blocked = false;
+            InputJoystick.Block("cutscene", false);
             ShowCaptionHidden();
             if (skipButton != null) skipButton.gameObject.SetActive(false);
             SlideBars(false);
@@ -177,7 +177,7 @@ namespace JuiceKing
             _done = false;
             _cutscene = false;
             gameObject.SetActive(true);
-            InputJoystick.Blocked = true;
+            InputJoystick.Block("intro", true);
             Platform.Pause("intro");
 
             _barH = topBar != null ? topBar.sizeDelta.y : 0f;
@@ -259,7 +259,7 @@ namespace JuiceKing
             CameraFollow.CancelPeeks();
             GameManager.I.data.introSeen = true;
             GameManager.I.Save();
-            InputJoystick.Blocked = false;
+            InputJoystick.Block("intro", false);
             Platform.Resume("intro");
             HideTitle();
             ShowCaptionHidden();
