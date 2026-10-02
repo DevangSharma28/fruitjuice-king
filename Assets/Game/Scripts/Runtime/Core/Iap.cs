@@ -68,8 +68,9 @@ namespace JuiceKing
         public static IapResult? SimulateNextResult;
 
         const float SimulatedDelay = 0.6f;
-        // A purchase that never reports back (scene change, store bug) stops blocking the shop after this long.
-        const float PendingTimeout = 90f;
+        // A purchase that never reports back (scene change, store bug) stops blocking the shop after this long. Generous:
+        // adding a card or a 2-step verification inside the store sheet can take minutes.
+        const float PendingTimeout = 300f;
         const int LedgerSize = 200;
 
         static string _pending;
@@ -252,14 +253,17 @@ namespace JuiceKing
                 gm.Save();
                 return false;
             }
+            // The transaction id goes into the ledger first: the grant below saves it together with the goods, so a
+            // listener that throws (and keeps the store from confirming) can never make a re-delivery grant twice.
+            Remember(ledger, transactionId);
             switch (p.kind)
             {
                 case IapKind.Apples: gm.AddApples(p.amount); break;
                 case IapKind.Tickets: gm.AddTickets(p.amount); break;
                 case IapKind.RemoveAds: gm.SetNoAds(true); break;
             }
-            Remember(ledger, transactionId);
-            gm.Save();
+            // Paid goods also go to the backup file at once (it is otherwise refreshed every few saves).
+            gm.SaveWithBackup();
             Analytics.Log(Analytics.IapCompleted, "product", p.id, "kind", p.kind.ToString());
             Haptics.Play(HapticKind.Success);
             Purchased?.Invoke(p);

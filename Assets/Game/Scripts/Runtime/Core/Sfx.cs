@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace JuiceKing
@@ -11,9 +12,20 @@ namespace JuiceKing
         Ding, Yip, Rustle, Chime, Thud, Tape, Count
     }
 
+    /// <summary>Per-sound loudness trim written by the editor's sound importer next to the clips (Resources/Sfx/gains).</summary>
+    [Serializable]
+    public class SfxGains
+    {
+        public List<string> ids = new List<string>();
+        public List<float> gains = new List<float>();
+    }
+
     /// <summary>
-    /// Procedurally synthesised sound effects, so the game needs no audio assets.
-    /// Tuned to be soft and tactile (short transients, rounded tails, no harsh square waves).
+    /// Sound effects. Every <see cref="SfxId"/> has a procedurally synthesised version (soft and tactile: short
+    /// transients, rounded tails). Recorded clips chosen in <c>Assets/Game/Audio/sound_picks.json</c> (Juice King ▸ Audio ▸
+    /// Sound Board) replace them: they are loaded from <c>Resources/Sfx</c> (<c>coin.wav</c>, <c>coin_2.wav</c>... are random
+    /// variants), and each is played at the loudness of the synthesised sound it replaces times its pick gain, so call
+    /// sites keep their volumes. Loops (chainsaw, juicer, engine, ambience) stay synthesised.
     /// </summary>
     public class Sfx : MonoBehaviour
     {
@@ -21,6 +33,9 @@ namespace JuiceKing
 
         static Sfx _i;
         static AudioClip[] _clips;
+        // Recorded replacements (null = synthesised) and the volume factor that matches their loudness.
+        static AudioClip[][] _recorded;
+        static float[] _gain;
         static AudioClip _chainsaw, _juicerLoop, _ambient, _engine;
         AudioSource[] _sources;
         AudioSource _ambientSource;
@@ -91,7 +106,8 @@ namespace JuiceKing
                 s.spatialBlend = 0f;
                 _i._sources[i] = s;
             }
-            BuildClips();
+            if (_clips == null) BuildClips();
+            LoadRecorded();
             AudioListener.volume = Muted ? 0f : 1f;
         }
 
@@ -122,7 +138,70 @@ namespace JuiceKing
             var src = _i._sources[_i._next];
             _i._next = (_i._next + 1) % _i._sources.Length;
             src.pitch = pitch * UnityEngine.Random.Range(0.96f, 1.04f);
-            src.PlayOneShot(_clips[(int)id], volume);
+            var rec = _recorded[(int)id];
+            if (rec != null) src.PlayOneShot(rec[rec.Length == 1 ? 0 : UnityEngine.Random.Range(0, rec.Length)], volume * _gain[(int)id]);
+            else src.PlayOneShot(_clips[(int)id], volume);
+        }
+
+        /// <summary>The synthesised version of a sound (Sound Board preview in the Editor).</summary>
+        public static AudioClip SynthClip(SfxId id)
+        {
+            if (_clips == null) BuildClips();
+            return _clips[(int)id];
+        }
+
+        /// <summary>Loads the recorded clips from Resources/Sfx and matches their loudness to the synthesised ones.</summary>
+        static void LoadRecorded()
+        {
+            int count = (int)SfxId.Count;
+            _recorded = new AudioClip[count][];
+            _gain = new float[count];
+            for (int i = 0; i < count; i++) _gain[i] = 1f;
+            var trims = new Dictionary<string, float>();
+            var table = Resources.Load<TextAsset>("Sfx/gains");
+            if (table != null)
+            {
+                var g = JsonUtility.FromJson<SfxGains>(table.text);
+                for (int i = 0; i < g.ids.Count && i < g.gains.Count; i++) trims[g.ids[i]] = g.gains[i];
+            }
+            var lists = new List<AudioClip>[count];
+            foreach (var clip in Resources.LoadAll<AudioClip>("Sfx"))
+            {
+                string n = clip.name;
+                int us = n.LastIndexOf('_');
+                if (us > 0 && int.TryParse(n.Substring(us + 1), out _)) n = n.Substring(0, us);
+                if (!Enum.TryParse(n, true, out SfxId id) || id == SfxId.Count) continue;
+                (lists[(int)id] ??= new List<AudioClip>()).Add(clip);
+            }
+            for (int i = 0; i < count; i++)
+            {
+                if (lists[i] == null) continue;
+                lists[i].Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+                _recorded[i] = lists[i].ToArray();
+                float synth = Loudness(_clips[i]);
+                float rec = Loudness(_recorded[i][0]);
+                float trim = trims.TryGetValue(((SfxId)i).ToString().ToLowerInvariant(), out var t) ? t : 1f;
+                _gain[i] = rec > 1e-4f && synth > 1e-4f ? Mathf.Clamp(synth / rec, 0.15f, 2.5f) * trim : trim;
+            }
+        }
+
+        /// <summary>Loudness as the RMS of the loudest 50 ms window (how loud a short effect feels).</summary>
+        static float Loudness(AudioClip clip)
+        {
+            if (clip == null) return 0f;
+            if (clip.loadState != AudioDataLoadState.Loaded) clip.LoadAudioData();
+            var data = new float[clip.samples * clip.channels];
+            if (!clip.GetData(data, 0)) return 0f;
+            int win = Mathf.Max(1, clip.frequency / 20) * clip.channels;
+            float best = 0f, sum = 0f;
+            for (int i = 0; i < data.Length; i++)
+            {
+                sum += data[i] * data[i];
+                if (i >= win) sum -= data[i - win] * data[i - win];
+                if (i >= win - 1) best = Mathf.Max(best, sum);
+            }
+            if (data.Length < win) best = sum * win / Mathf.Max(1, data.Length);
+            return Mathf.Sqrt(Mathf.Max(0f, best) / win);
         }
 
         // ---------------------------------------------------------------- synthesis

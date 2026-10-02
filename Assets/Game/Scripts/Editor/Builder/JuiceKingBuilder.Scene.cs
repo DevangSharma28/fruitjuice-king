@@ -933,13 +933,8 @@ namespace JuiceKing.EditorTools
             // Never lower the engine's own minimum (API 25 in Unity 6.4); only raise older projects.
             if ((int)PlayerSettings.Android.minSdkVersion < (int)AndroidSdkVersions.AndroidApiLevel24)
                 PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
-            PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
-            // The bundle identifier is the owner's to choose (RELEASE_CHECKLIST.md): applied only once it is set.
-            if (!string.IsNullOrEmpty(ReleaseConfig.BundleIdentifier))
-            {
-                PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, ReleaseConfig.BundleIdentifier);
-                PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.iOS, ReleaseConfig.BundleIdentifier);
-            }
+            // Store identity, version, target API and the AdMob app id (JuiceKingBuilder.Release.cs).
+            ConfigureRelease();
             EditorSettings.spritePackerMode = SpritePackerMode.SpriteAtlasV2;
             BuildSpriteAtlas();
 

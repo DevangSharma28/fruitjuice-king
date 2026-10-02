@@ -78,7 +78,7 @@ namespace JuiceKing.EditorTools
             ShopGrid(content, IapCatalog.OfKind(IapKind.Apples), true, cards, ref y);
             var ticketsHead = ShopSectionHeader(content, "AD TICKETS", _sTicket ? _sTicket : _sStar, ref y);
             ShopGrid(content, IapCatalog.OfKind(IapKind.Tickets), false, cards, ref y);
-            var adsHead = ShopSectionHeader(content, "REMOVE ADS", _sNoAds ? _sNoAds : _sAd, ref y);
+            var adsHead = ShopSectionHeader(content, "VIP", _sNoAds ? _sNoAds : _sAd, ref y);
             foreach (var p in IapCatalog.OfKind(IapKind.RemoveAds)) cards.Add(RemoveAdsCard(content, p, ref y));
             content.sizeDelta = new Vector2(0f, -y + 30f);
 
@@ -272,7 +272,7 @@ namespace JuiceKing.EditorTools
             }
         }
 
-        /// <summary>Full-width Remove Ads card: icon, title, two description lines and the price.</summary>
+        /// <summary>Full-width VIP: Skip Ads card: icon, title, two description lines and the price.</summary>
         static ShopCard RemoveAdsCard(RectTransform content, IapProduct p, ref float y)
         {
             y -= 26f;
@@ -292,12 +292,12 @@ namespace JuiceKing.EditorTools
             title.fontSizeMin = 34f;
             title.fontSizeMax = 52f;
             var desc = Label(UIRect("Desc", card, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(textX, -4f), new Vector2(textW, 44f)),
-                "Remove forced ads permanently", 32f, UiInk, TextAlignmentOptions.MidlineLeft, false);
+                "Get every video reward instantly", 32f, UiInk, TextAlignmentOptions.MidlineLeft, false);
             desc.enableAutoSizing = true;
             desc.fontSizeMin = 22f;
             desc.fontSizeMax = 32f;
             var note = Label(UIRect("Note", card, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(textX, -50f), new Vector2(textW, 36f)),
-                "Optional reward ads stay available", 26f, new Color(0.5f, 0.4f, 0.32f), TextAlignmentOptions.MidlineLeft, false);
+                "No videos to watch. Forever. One purchase.", 26f, new Color(0.5f, 0.4f, 0.32f), TextAlignmentOptions.MidlineLeft, false);
             note.enableAutoSizing = true;
             note.fontSizeMin = 18f;
             note.fontSizeMax = 26f;

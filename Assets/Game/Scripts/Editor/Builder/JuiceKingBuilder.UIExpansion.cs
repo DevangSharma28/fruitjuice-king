@@ -447,7 +447,8 @@ namespace JuiceKing.EditorTools
             var vbBtn = AtlasButton(vb, _uBtnGreen ? _uBtnGreen : _sButton, 2.3f, false);
             var vbIcon = UIRect("Ad", vb, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(80f, 4f), new Vector2(92f, 92f));
             Img(vbIcon, _uWatchAd ? _uWatchAd : _sAd, Color.white);
-            Label(Stretch("Text", vb, 140f, 36f, 0f, 18f), "WATCH AD", 50f, Color.white, TextAlignmentOptions.Center, true).enableAutoSizing = true;
+            var vbText = Label(Stretch("Text", vb, 140f, 36f, 0f, 18f), "WATCH AD", 50f, Color.white, TextAlignmentOptions.Center, true);
+            vbText.enableAutoSizing = true;
 
             var ab = UIRect("Apples", w, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, abBottom), new Vector2(600f, 140f));
             var abBtn = AtlasButton(ab, _uBtnYellow ? _uBtnYellow : _sButton, 2.5f, false);
@@ -469,6 +470,8 @@ namespace JuiceKing.EditorTools
             pp.appleButton = abBtn;
             pp.appleCostText = cost;
             pp.adButton = vbBtn;
+            pp.adText = vbText;
+            pp.adIcon = vbIcon.gameObject;
             pp.closeButton = CloseHotspot(w, sprite, sprite ? sprite.name : "", panelScale);
             return pp;
         }

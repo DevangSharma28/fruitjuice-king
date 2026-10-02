@@ -22,7 +22,7 @@ namespace JuiceKing
         public Sprite toggleOn, toggleOff;
         public Image vibrationToggle;
         public Button vibrationButton;
-        [Tooltip("Restore Purchases (also in the shop): required by the App Store for Remove Ads.")]
+        [Tooltip("Restore Purchases (also in the shop): brings VIP back on a new device.")]
         public Button restoreButton;
         [Tooltip("Privacy policy / consent options. Hidden until a policy URL or a consent provider exists.")]
         public Button privacyButton;
@@ -122,7 +122,7 @@ namespace JuiceKing
             {
                 if (HUD.I == null) return;
                 bool owned = GameManager.I != null && GameManager.I.NoAds;
-                HUD.I.Toast(!ok ? "Could not restore purchases. Check your connection." : owned ? "Purchases restored: Remove Ads active" : "Purchases restored. Nothing new to restore.", null, 2.6f);
+                HUD.I.Toast(!ok ? "Could not restore purchases. Check your connection." : owned ? "Purchases restored: VIP active" : "Purchases restored. Nothing new to restore.", null, 2.6f);
                 Refresh(false);
             });
         }

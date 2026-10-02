@@ -1,0 +1,129 @@
+{
+    "picks": [
+        {
+            "id": "Pop",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/ApplicationUX/Pop1.wav"
+            ],
+            "maxLength": 0.18000000715255738,
+            "gain": 1.0
+        },
+        {
+            "id": "Click",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/ApplicationUX/Button1.wav"
+            ],
+            "maxLength": 0.11999999731779099,
+            "gain": 1.0
+        },
+        {
+            "id": "Coin",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/Objects/Coins2.wav",
+                "Assets/Feel/NiceVibrations/HapticSamples/Objects/Coins3.wav",
+                "Assets/Feel/NiceVibrations/HapticSamples/Objects/Coins5.wav",
+                "Assets/Feel/NiceVibrations/HapticSamples/Objects/Coins7.wav"
+            ],
+            "maxLength": 0.3499999940395355,
+            "gain": 1.0
+        },
+        {
+            "id": "Cash",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/Objects/Cash5.wav"
+            ],
+            "maxLength": 0.699999988079071,
+            "gain": 1.0
+        },
+        {
+            "id": "BigCash",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/Objects/Cash8.wav"
+            ],
+            "maxLength": 1.7999999523162842,
+            "gain": 1.0
+        },
+        {
+            "id": "Unlock",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/ApplicationUX/Award1.wav"
+            ],
+            "maxLength": 0.0,
+            "gain": 1.0
+        },
+        {
+            "id": "Reward",
+            "sources": [
+                "Assets/Feel/FeelDemos/Strike/Sounds/FeelStrikeSuccess.wav"
+            ],
+            "maxLength": 1.399999976158142,
+            "gain": 0.8999999761581421
+        },
+        {
+            "id": "Error",
+            "sources": [
+                "Assets/ThirdParty/Audio/Casual Game Sounds/CasualGameSounds/DM-CGS-27.wav"
+            ],
+            "maxLength": 0.0,
+            "gain": 0.800000011920929
+        },
+        {
+            "id": "Whoosh",
+            "sources": [
+                "Assets/Feel/FeelDemos/Duck/Sounds/FeelDuckWoosh.wav"
+            ],
+            "maxLength": 0.0,
+            "gain": 1.0
+        },
+        {
+            "id": "Tink",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/SoundFX/IceCubes1.wav"
+            ],
+            "maxLength": 0.2800000011920929,
+            "gain": 1.0
+        },
+        {
+            "id": "Chime",
+            "sources": [
+                "Assets/Feel/NiceVibrations/Demo/DemoAssets/HapticClipsDemo/Sounds/NVCarillon.wav"
+            ],
+            "maxLength": 1.100000023841858,
+            "gain": 0.8999999761581421
+        },
+        {
+            "id": "Tape",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/Objects/Velcro1.wav"
+            ],
+            "maxLength": 0.6000000238418579,
+            "gain": 1.0
+        },
+        {
+            "id": "Load",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/Impacts/Wood1.wav"
+            ],
+            "maxLength": 0.3499999940395355,
+            "gain": 1.0
+        },
+        {
+            "id": "Thud",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/Impacts/Wood3.wav"
+            ],
+            "maxLength": 0.3499999940395355,
+            "gain": 1.0
+        },
+        {
+            "id": "Step",
+            "sources": [
+                "Assets/Feel/NiceVibrations/HapticSamples/Footsteps/FootstepGravel1.wav",
+                "Assets/Feel/NiceVibrations/HapticSamples/Footsteps/FootstepGravel2.wav",
+                "Assets/Feel/NiceVibrations/HapticSamples/Footsteps/FootstepGravel3.wav"
+            ],
+            "maxLength": 0.20000000298023225,
+            "gain": 0.800000011920929
+        }
+    ]
+}

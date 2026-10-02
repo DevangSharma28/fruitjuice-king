@@ -18,6 +18,8 @@ namespace JuiceKing
         bool _connecting, _connected, _fetched;
         readonly Dictionary<string, Product> _products = new Dictionary<string, Product>();
         readonly List<ProductDefinition> _definitions = new List<ProductDefinition>();
+        // Restore Purchases reports back only once the store's purchase list has been applied.
+        Action<bool> _restoreDone;
 
         public bool IsReady => _connected && _fetched;
         public bool IsInitializing => _connecting || (_connected && !_fetched);
@@ -114,10 +116,21 @@ namespace JuiceKing
                     var p = IapCatalog.Get(item.Product.definition.id);
                     if (p != null && !p.Consumable) Iap.HandlePending(p.id, o.Info.TransactionID);
                 }
+            FinishRestore(true);
         }
 
-        void OnPurchasesFetchFailed(PurchasesFetchFailureDescription f) =>
+        void OnPurchasesFetchFailed(PurchasesFetchFailureDescription f)
+        {
             Debug.LogWarning("[Iap] purchase fetch failed: " + f.Message);
+            FinishRestore(false);
+        }
+
+        void FinishRestore(bool ok)
+        {
+            var done = _restoreDone;
+            _restoreDone = null;
+            done?.Invoke(ok);
+        }
 
         void OnPurchasePending(PendingOrder order)
         {
@@ -175,11 +188,15 @@ namespace JuiceKing
                 done?.Invoke(false);
                 return;
             }
-            // Restored orders arrive through OnPurchasePending (and are de-duplicated by Iap).
+            // Owned non-consumables arrive through OnPurchasesFetched (unfinished ones through OnPurchasePending), both
+            // de-duplicated by Iap. The caller hears back once that list has been applied, so "VIP restored" is accurate.
+            FinishRestore(false);
+            _restoreDone = done;
             _store.RestoreTransactions((ok, error) =>
             {
-                if (!ok) Debug.LogWarning("[Iap] restore failed: " + error);
-                done?.Invoke(ok);
+                if (ok) return;
+                Debug.LogWarning("[Iap] restore failed: " + error);
+                FinishRestore(false);
             });
         }
     }

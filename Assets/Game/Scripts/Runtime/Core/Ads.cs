@@ -4,13 +4,18 @@ using UnityEngine;
 namespace JuiceKing
 {
     /// <summary>
-    /// Anything that can play a rewarded video. Plug a real network (LevelPlay, Unity Ads, AdMob...) in by
-    /// implementing this and assigning <see cref="Ads.Provider"/> at startup (<see cref="AppServices"/>). Read ad unit
-    /// ids from <see cref="ReleaseConfig"/> and the consent state from <see cref="Privacy"/>.
+    /// Anything that can play a rewarded video (<see cref="AdMobProvider"/> on device). Assigned to
+    /// <see cref="Ads.Provider"/> at startup by <see cref="AppServices"/>, after consent. Reads ad unit ids from
+    /// <see cref="ReleaseConfig"/>.
     /// </summary>
     public interface IRewardedAdProvider
     {
         bool IsReady { get; }
+        /// <summary>A video is on screen. <see cref="Ads"/> never times an ad out while it is showing: the player may sit
+        /// on the end card or visit the advertiser's store page for as long as they like.</summary>
+        bool IsShowing { get; }
+        /// <summary>Called every frame by <see cref="ServicesRunner"/>: (re)load an ad when needed.</summary>
+        void Tick();
         /// <param name="placement">Placement name for analytics / network config.</param>
         /// <param name="done">Call once: true only when the network confirmed the reward (video watched to the end).
         /// Extra calls are ignored.</param>
@@ -28,7 +33,9 @@ namespace JuiceKing
     }
 
     /// <summary>
-    /// Entry point for every ad. Rewarded flow: the game shows the reward and the player confirms (OfferPopup /
+    /// Entry point for every ad. The game ships rewarded ads only (no interstitials, no banners). VIP (the
+    /// <c>jk_remove_ads</c> product, <see cref="GameManager.NoAds"/>) skips every video: rewards are granted at once.
+    /// Rewarded flow: the game shows the reward and the player confirms (OfferPopup /
     /// PremiumPopup / a labelled button), then <see cref="ShowRewarded"/> plays the video (or spends an Ad Ticket) and
     /// grants exactly once, only after the network confirmed completion, and saves right away. A provider that reports
     /// twice, or never reports back, cannot double-grant or lock the buttons. Without a provider a test overlay is
@@ -58,7 +65,7 @@ namespace JuiceKing
         /// <summary>Spend an Ad Ticket (when the player has one) instead of playing the video.</summary>
         public static bool UseTickets = true;
 
-        // A provider that never calls back must not lock the ad buttons forever.
+        // A provider that never calls back must not lock the ad buttons forever (never applied while a video shows).
         const float ShowTimeout = 120f;
 
         static Action<bool> _finish;
@@ -70,6 +77,7 @@ namespace JuiceKing
         {
             get
             {
+                if (_finish != null && Provider != null && Provider.IsShowing) _busySince = Time.realtimeSinceStartup;
                 if (_finish != null && Time.realtimeSinceStartup - _busySince > ShowTimeout)
                 {
                     Debug.LogWarning("[Ads] provider did not report back: treating the ad as failed");
@@ -83,7 +91,30 @@ namespace JuiceKing
 
         static bool VideoReady => Provider != null ? Provider.IsReady : SimulateWhenNoProvider;
 
-        public static bool IsReady => !Busy && (HasTicket || VideoReady);
+        /// <summary>VIP: Skip Ads owned (<see cref="GameManager.NoAds"/>): every rewarded placement is granted at once.</summary>
+        public static bool Vip => GameManager.I != null && GameManager.I.NoAds;
+
+        /// <summary>A reward can be claimed right now (VIP, an Ad Ticket, or a loaded video).</summary>
+        public static bool IsReady => !Busy && (Vip || HasTicket || VideoReady);
+
+        /// <summary>Claiming plays no video (VIP or an Ad Ticket): buttons drop the video badge and say so.</summary>
+        public static bool SkipsVideo => Vip || HasTicket;
+
+        /// <summary>
+        /// Rewarded offers exist in this build at all: a network is installed (or simulated in debug builds), or the
+        /// player can claim without a video. False only in a release build whose ad SDK failed to start, where the
+        /// reward buttons are hidden instead of sitting there disabled.
+        /// </summary>
+        public static bool Enabled => Provider != null || SimulateWhenNoProvider || SkipsVideo;
+
+        /// <summary>Button label for a rewarded offer: <paramref name="watch"/> for a video, otherwise what is spent.</summary>
+        public static string ClaimLabel(string watch = "WATCH") => Vip ? "CLAIM" : HasTicket ? "USE TICKET" : watch;
+
+        /// <summary>Why a reward cannot be claimed right now (shown as a toast when a dimmed button is tapped).</summary>
+        public static string NotReadyMessage =>
+            Busy ? "Please wait..."
+            : Application.internetReachability == NetworkReachability.NotReachable ? "No internet connection. Videos need a connection."
+            : "No video available right now. Try again in a moment.";
 
         /// <summary>
         /// False once Remove Ads was bought. Any forced ad (interstitial, banner) must check this; rewarded ads are
@@ -103,6 +134,13 @@ namespace JuiceKing
             if (Busy)
             {
                 onFail?.Invoke();
+                return;
+            }
+
+            if (Vip)
+            {
+                Analytics.Log(Analytics.RewardedCompleted, "placement", placement, "vip", true);
+                Grant(placement, onReward);
                 return;
             }
 

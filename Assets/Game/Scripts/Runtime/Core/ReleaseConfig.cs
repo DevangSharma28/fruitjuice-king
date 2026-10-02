@@ -12,27 +12,43 @@ namespace JuiceKing
     public static class ReleaseConfig
     {
         // ------------------------------------------------------------------ identity
-        /// <summary>Store bundle identifier (e.g. "com.yourstudio.juicekingtycoon"). Empty = keep Player Settings as is.
-        /// Applied to Android and iOS by Build Everything. Never change it after the first public release.</summary>
-        public const string BundleIdentifier = "";
+        /// <summary>Store package name / bundle identifier. Applied to Android and iOS by Build Everything
+        /// (<c>ConfigureProject</c>). Never change it after the first upload to Google Play.</summary>
+        public const string BundleIdentifier = "com.ionixgames.juicekingtycoon";
+        /// <summary>Player Settings company name. It is part of <c>Application.persistentDataPath</c> (save backup file):
+        /// never change it after release.</summary>
+        public const string CompanyName = "Ionix Games";
 
-        // ------------------------------------------------------------------ ads (rewarded + interstitial)
-        // App keys / unit ids from your mediation dashboard (LevelPlay, AdMob, AppLovin MAX...). Empty = not configured.
-        public const string AndroidAdAppKey = "";
-        public const string IosAdAppKey = "";
-        public const string AndroidRewardedUnitId = "";
-        public const string IosRewardedUnitId = "";
+        // ------------------------------------------------------------------ ads: Google AdMob, rewarded only
+        // AdMob ▸ Apps ▸ App settings ▸ App ID ("ca-app-pub-XXXX~YYYY") and Ad units ▸ Rewarded ("ca-app-pub-XXXX/ZZZZ").
+        // The values below are Google's official TEST ids: they always fill with test ads and earn nothing. Replace them
+        // with the real ids before the production release (MissingItems and the build check warn while they are in use).
+        public const string AndroidAdAppKey = "ca-app-pub-3940256099942544~3347511713";
+        public const string IosAdAppKey = "ca-app-pub-3940256099942544~1458002511";
+        public const string AndroidRewardedUnitId = "ca-app-pub-3940256099942544/5224354917";
+        public const string IosRewardedUnitId = "ca-app-pub-3940256099942544/1712485313";
+        /// <summary>Not used: the game shows rewarded ads only (see <see cref="InterstitialsEnabled"/>).</summary>
         public const string AndroidInterstitialUnitId = "";
         public const string IosInterstitialUnitId = "";
+
+        /// <summary>Your own phones' AdMob test-device ids (logcat prints "Use new RequestConfiguration...TestDeviceIds")
+        /// so real ad units serve test ads to you. Also lets debug builds preview the EEA consent form.</summary>
+        public static readonly string[] AdMobTestDeviceIds = new string[0];
+
+        const string GoogleTestPublisher = "ca-app-pub-3940256099942544";
 
         public static string AdAppKey => Application.platform == RuntimePlatform.IPhonePlayer ? IosAdAppKey : AndroidAdAppKey;
         public static string RewardedUnitId => Application.platform == RuntimePlatform.IPhonePlayer ? IosRewardedUnitId : AndroidRewardedUnitId;
         public static string InterstitialUnitId => Application.platform == RuntimePlatform.IPhonePlayer ? IosInterstitialUnitId : AndroidInterstitialUnitId;
         public static bool AdsConfigured => !string.IsNullOrEmpty(AdAppKey) && !string.IsNullOrEmpty(RewardedUnitId);
+        /// <summary>Google's test ids are still in place (fine for internal testing, never for production).</summary>
+        public static bool UsingTestAdIds(bool android) =>
+            (android ? AndroidAdAppKey : IosAdAppKey).StartsWith(GoogleTestPublisher)
+            || (android ? AndroidRewardedUnitId : IosRewardedUnitId).StartsWith(GoogleTestPublisher);
 
         // ------------------------------------------------------------------ interstitial pacing (forced ads)
-        /// <summary>Master switch. Forced ads never show without a real provider, after Remove Ads, or during the tutorial.</summary>
-        public const bool InterstitialsEnabled = true;
+        /// <summary>Master switch: off. The game monetises with optional rewarded ads only; no ad is ever forced.</summary>
+        public const bool InterstitialsEnabled = false;
         /// <summary>No forced ad in the first minutes of a session.</summary>
         public const float InterstitialFirstDelay = 300f;
         /// <summary>Minimum gap between two forced ads.</summary>
@@ -50,6 +66,8 @@ namespace JuiceKing
         public static readonly Dictionary<string, string> AppleProductIds = new Dictionary<string, string>();
 
         // ------------------------------------------------------------------ legal / privacy
+        /// <summary>Public privacy policy page (Google Play requires it in the store listing <b>and</b> inside the app:
+        /// Settings ▸ Privacy). Draft text: PRIVACY_POLICY.md in the project root.</summary>
         public const string PrivacyPolicyUrl = "";
         public const string TermsOfServiceUrl = "";
         /// <summary>Set when the game is directed at children (COPPA / Families policy): ads must be non-personalised.</summary>
@@ -59,9 +77,8 @@ namespace JuiceKing
         public static List<string> MissingItems()
         {
             var list = new List<string>();
-            if (string.IsNullOrEmpty(AndroidAdAppKey) || string.IsNullOrEmpty(AndroidRewardedUnitId)) list.Add("Android ad app key / rewarded unit id");
-            if (string.IsNullOrEmpty(IosAdAppKey) || string.IsNullOrEmpty(IosRewardedUnitId)) list.Add("iOS ad app key / rewarded unit id");
-            if (string.IsNullOrEmpty(AndroidInterstitialUnitId) || string.IsNullOrEmpty(IosInterstitialUnitId)) list.Add("interstitial unit ids");
+            if (string.IsNullOrEmpty(AndroidAdAppKey) || string.IsNullOrEmpty(AndroidRewardedUnitId)) list.Add("Android AdMob app id / rewarded unit id");
+            else if (UsingTestAdIds(true)) list.Add("real Android AdMob ids (Google test ids in use)");
             if (Ads.Provider == null) list.Add("rewarded ad provider (Ads.Provider)");
             if (Iap.Provider == null) list.Add("store provider (Iap.Provider)");
             if (string.IsNullOrEmpty(PrivacyPolicyUrl)) list.Add("privacy policy URL");

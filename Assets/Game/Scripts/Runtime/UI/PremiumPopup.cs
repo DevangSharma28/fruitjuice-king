@@ -23,6 +23,10 @@ namespace JuiceKing
         public Button appleButton;
         public TextMeshProUGUI appleCostText;
         public Button adButton;
+        [Tooltip("Label of the ad button: WATCH AD, or CLAIM / USE TICKET when no video is needed.")]
+        public TextMeshProUGUI adText;
+        [Tooltip("Video icon on the ad button, hidden when no video is needed (VIP / Ad Ticket).")]
+        public GameObject adIcon;
         public Button closeButton;
 
         Action _onApple, _onAd;
@@ -69,6 +73,8 @@ namespace JuiceKing
             }
             if (appleCostText != null) appleCostText.text = appleCost.ToString();
             adButton.gameObject.SetActive(onAd != null && Ads.IsReady);
+            if (adText != null) adText.text = Ads.ClaimLabel("WATCH AD");
+            if (adIcon != null) adIcon.SetActive(!Ads.SkipsVideo);
             appleButton.interactable = true;
             adButton.interactable = true;
             RefreshLive();

@@ -191,6 +191,8 @@ namespace JuiceKing
                 if (p == null) continue;
                 bool owned = Iap.Owns(p);
                 bool available = Iap.IsAvailable(p);
+                // VIP already claims every reward for free: Ad Tickets would be useless, so they are not sold to VIPs.
+                bool vipCovers = p.kind == IapKind.Tickets && Ads.Vip;
                 if (card.titleText != null) card.titleText.text = p.title;
                 if (card.amountText != null) card.amountText.text = p.kind == IapKind.RemoveAds ? "" : "x" + p.amount.ToString("N0");
                 if (card.bonusText != null)
@@ -199,8 +201,8 @@ namespace JuiceKing
                     card.bonusText.text = "+" + p.bonusPercent + "% BONUS";
                 }
                 // Prices always come from the store (localized); "..." while it is still connecting.
-                card.priceText.text = owned ? "OWNED" : available ? Iap.PriceText(p) : Iap.IsInitializing ? "..." : "N/A";
-                card.button.interactable = !owned && !busy && available;
+                card.priceText.text = owned ? "OWNED" : vipCovers ? "VIP" : available ? Iap.PriceText(p) : Iap.IsInitializing ? "..." : "N/A";
+                card.button.interactable = !owned && !vipCovers && !busy && available;
                 bool featured = p.badge != IapBadge.None && !owned;
                 if (card.highlights != null)
                     foreach (var h in card.highlights)
@@ -246,7 +248,7 @@ namespace JuiceKing
         {
             if (!_open || Iap.Busy) return;
             var p = IapCatalog.Get(card.productId);
-            if (p == null || Iap.Owns(p)) return;
+            if (p == null || Iap.Owns(p) || (p.kind == IapKind.Tickets && Ads.Vip)) return;
             if (!Iap.IsReady)
             {
                 Sfx.Play(SfxId.Error, 0.35f);
@@ -270,7 +272,7 @@ namespace JuiceKing
                         // Celebrated by OnPurchased (it also covers restores and late deliveries).
                         break;
                     case IapResult.AlreadyOwned:
-                        SetStatus(p.kind == IapKind.RemoveAds ? "You already own Remove Ads." : "This purchase was already delivered.");
+                        SetStatus(p.kind == IapKind.RemoveAds ? "You are already a VIP." : "This purchase was already delivered.");
                         break;
                     case IapResult.Cancelled:
                         SetStatus("Purchase cancelled.");
@@ -317,11 +319,11 @@ namespace JuiceKing
             Sfx.Play(SfxId.Reward, 0.6f);
             Sfx.Play(SfxId.Sparkle, 0.4f);
             Tweener.Punch(card.root, 0.12f, 0.35f, Vector3.one);
-            SetStatus(p.kind == IapKind.RemoveAds ? "Forced ads removed. Thank you!" : "Thank you for your purchase!");
+            SetStatus(p.kind == IapKind.RemoveAds ? "VIP active: every reward is now instant. Thank you!" : "Thank you for your purchase!");
             if (gainText == null) return;
             gainText.text = p.kind == IapKind.Apples ? "+" + p.amount.ToString("N0") + " GOLDEN APPLES"
                 : p.kind == IapKind.Tickets ? "+" + p.amount.ToString("N0") + " AD TICKETS"
-                : "NO MORE ADS!";
+                : "VIP ACTIVE!";
             var rt = gainText.rectTransform;
             rt.position = card.root.position;
             Vector2 start = rt.anchoredPosition;
@@ -346,7 +348,7 @@ namespace JuiceKing
                 if (this == null) return;
                 Refresh();
                 bool gotNoAds = GameManager.I != null && GameManager.I.NoAds && !hadNoAds;
-                SetStatus(!ok ? "Could not restore purchases. Check your connection." : gotNoAds ? "Remove Ads restored!" : "Purchases restored. Nothing new to restore.");
+                SetStatus(!ok ? "Could not restore purchases. Check your connection." : gotNoAds ? "VIP restored!" : "Purchases restored. Nothing new to restore.");
             });
         }
 

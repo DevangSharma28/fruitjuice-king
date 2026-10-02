@@ -93,7 +93,7 @@ namespace JuiceKing
         public int goldenApples = Economy.StartingApples;
         /// <summary>Ad Tickets (bought in the shop): each one claims a rewarded-ad reward without watching the ad.</summary>
         public int adTickets;
-        /// <summary>Remove Ads purchased: no forced ads. Rewarded ads stay available as optional rewards.</summary>
+        /// <summary>VIP: Skip Ads purchased (<c>jk_remove_ads</c>): every rewarded offer is granted without a video.</summary>
         public bool noAds;
         /// <summary>Store transaction ids already granted (newest last, capped): a re-delivered purchase never grants twice. v4.</summary>
         public List<string> iapTransactions = new List<string>();
@@ -237,6 +237,13 @@ namespace JuiceKing
                 if (kb.f10Key.wasPressedThisFrame) ExpansionManager.DebugComplete();
             }
 #endif
+        }
+
+        /// <summary>Saves and refreshes the backup file now (purchases: the backup must never be older than paid goods).</summary>
+        public void SaveWithBackup()
+        {
+            _backupTimer = 0f;
+            Save();
         }
 
         void OnApplicationPause(bool paused)

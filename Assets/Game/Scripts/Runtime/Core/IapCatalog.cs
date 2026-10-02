@@ -14,14 +14,14 @@ namespace JuiceKing
         public IapKind kind;
         /// <summary>Pack name on the card ("STARTER"...).</summary>
         public string title;
-        /// <summary>Apples or tickets granted (ignored for Remove Ads).</summary>
+        /// <summary>Apples or tickets granted (ignored for VIP).</summary>
         public int amount;
         /// <summary>"+20% BONUS" line on the card; 0 hides it.</summary>
         public int bonusPercent;
         /// <summary>Shown until the store reports its localized price.</summary>
         public string fallbackPrice;
         public IapBadge badge;
-        /// <summary>Consumables can be bought again; Remove Ads is bought once and restored.</summary>
+        /// <summary>Consumables can be bought again; VIP is bought once and restored.</summary>
         public bool Consumable => kind != IapKind.RemoveAds;
     }
 
@@ -32,6 +32,9 @@ namespace JuiceKing
     /// </summary>
     public static class IapCatalog
     {
+        /// <summary>"VIP: Skip Ads" (non-consumable). Every rewarded offer is granted without a video, forever. The game
+        /// has no forced ads, so it is sold as skipping the optional videos, never as "removing ads". The id predates the
+        /// rename and is the Play Console product id: keep it.</summary>
         public const string RemoveAdsId = "jk_remove_ads";
 
         public static readonly IapProduct[] Products =
@@ -50,7 +53,7 @@ namespace JuiceKing
             Tickets("jk_tickets_mega", "MEGA", 160, 60, "$19.99"),
             Tickets("jk_tickets_ultimate", "ULTIMATE", 450, 80, "$49.99", IapBadge.BestValue),
 
-            new IapProduct { id = RemoveAdsId, kind = IapKind.RemoveAds, title = "REMOVE ADS", fallbackPrice = "$3.99" },
+            new IapProduct { id = RemoveAdsId, kind = IapKind.RemoveAds, title = "VIP: SKIP ADS", fallbackPrice = "$9.99" },
         };
 
         public static IapProduct Get(string id)

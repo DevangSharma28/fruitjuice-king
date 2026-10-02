@@ -20,7 +20,7 @@ Developers: see [`CLAUDE.md`](../../CLAUDE.md) in the project root for architect
 - `M` adds $500.
 - `F9` resets progress (back to the original farm).
 - `F10` opens the world-complete popup without finishing the world.
-- **Settings ▸ DEBUG: SWITCH WORLD** jumps to Farm, Tropical or Berry. Each world's progress is parked and comes back when you return; Golden Apples, Ad Tickets, Remove Ads and stats are shared. A world you haven't visited starts fresh. The row is hidden in release builds.
+- **Settings ▸ DEBUG: SWITCH WORLD** jumps to Farm, Tropical or Berry. Each world's progress is parked and comes back when you return; Golden Apples, Ad Tickets, VIP and stats are shared. A world you haven't visited starts fresh. The row is hidden in release builds.
 - **Juice King ▸ Reset Save Data** clears the save from the menu.
 
 ## Core loop
@@ -66,7 +66,7 @@ Once the tutorial reaches its first sale, a column of boost buttons appears on t
 
 Watching again while a boost is active adds time (capped at 10 minutes). Boost time only runs while you play (not under menus or ads) and is saved, so it survives a restart or a world change.
 
-**Ads are simulated** in the Editor and development builds. `Core/Ads.cs` is the single entry point. When no network is plugged in, a test overlay counts down for 3 seconds and then grants the reward. The game pauses meanwhile; the X button tests the "ad failed" path before the countdown ends. Release builds without a network hide the ad buttons. Every reward is granted once, only after the ad completed, and saved at once. To ship real ads, implement `IRewardedAdProvider` (and optionally `IInterstitialAdProvider`) and install it in `Core/AppServices.cs` (see `RELEASE_CHECKLIST.md` and `MONETIZATION_NOTES.md` in the project root).
+**Ads are optional rewarded videos only** (Google AdMob, `Core/AdMobProvider.cs`); there are no forced ads. `Core/Ads.cs` is the single entry point. On Android and iOS devices the AdMob plugin plays the video after Google's consent form (EEA / UK); in the Editor a test overlay counts down for 3 seconds and then grants the reward (the X button tests the "ad failed" path). While no video is loaded the boost buttons are dimmed and a tap says why (offline, no video yet). VIP players and players with an Ad Ticket see "CLAIM" / "USE TICKET" instead of the video badge. Every reward is granted once, only after the ad completed, and saved at once. Setup: `PLAY_STORE_SUBMISSION.md`, `RELEASE_CHECKLIST.md` and `MONETIZATION_NOTES.md` in the project root.
 
 Placement names are the `Ads.Placement*` constants.
 
@@ -203,15 +203,15 @@ Rewards fly up to the counter with a chime; spending sparkles. Numbers live in `
 The **+** on the Golden Apple counter opens the shop on its apple packs; the **+** on the smaller **Ad Ticket** counter under it opens it on the ticket packs. The shop is one scrolling popup:
 
 - **GOLDEN APPLES:** six packs (Starter, Small, Medium, Large, Mega, Ultimate) with a growing pile of apples, a bonus line and a price button. Medium is tagged **POPULAR**, Ultimate **BEST VALUE** (gold glow and rays).
-- **AD TICKETS:** six packs. One ticket claims a rewarded-ad reward (boosts, free cash, offline x2, fox restore...) instantly, without the video. Tickets are used automatically whenever you have one; a toast says "Ad Ticket used!".
-- **REMOVE ADS:** removes forced ads for good and shows **OWNED** afterwards. Rewarded ads stay available as optional rewards.
-- **Restore Purchases** at the bottom (required by the App Store for Remove Ads).
+- **AD TICKETS:** six packs. One ticket claims a rewarded-ad reward (boosts, free cash, offline x2, fox restore...) instantly, without the video. Tickets are used automatically whenever you have one; a toast says "Ad Ticket used!". Not sold to VIP players (their cards read **VIP**).
+- **VIP: SKIP ADS:** every video reward is granted instantly, forever. Shows **OWNED** afterwards.
+- **Restore Purchases** at the bottom (brings VIP back on a new device; it is also restored automatically at launch).
 
 Products, quantities, bonus lines, badges and fallback prices are data in `Core/IapCatalog.cs` (`IapCatalog.Products`); the cards read them at runtime, so retuning needs no rebuild (adding, removing or reordering products does: rebuild the scenes). Product ids (`jk_apples_starter`...) must match the store and must never be renamed once shipped.
 
 **Purchases.** `Core/Iap.cs` is the single entry point. On Android and iOS devices it talks to the stores through Unity IAP 5 (`Core/UnityIapProvider.cs`); in the Editor and development builds a simulated store completes a purchase after 0.6 s. Each store transaction is granted once (its id is kept in the save), saved, and only then confirmed with the store, so nothing is lost or doubled if the app is killed mid-purchase. The shop shows the store's localized prices and its states (connecting, unavailable, cancelled, failed, waiting for approval, owned). Store setup: `RELEASE_CHECKLIST.md`.
 
-Forced ads (interstitials, banners) don't exist yet; when they are added they must check `Ads.ForcedAdsAllowed`.
+Forced ads (interstitials, banners) are switched off on purpose (`ReleaseConfig.InterstitialsEnabled`).
 
 ## Loading screen
 
@@ -234,7 +234,8 @@ To change the art, replace the two PNGs (keep the names) and run **Juice King �
 - **Particles** (`Core/Fx.cs`): juice droplets, lingering ground splats, shockwave rings, stars, hearts, leaves, coins, glints, bubbles, footstep dust and a turbo trail. They all come from 16 shared, looping particle systems (emission rate 0) that are emitted on demand.
 - **Animation**: the stack bounces on every landing and items squash; characters lean into their run; customers hop and cheer (the `emote-yes` clip is on the `Cheer` trigger); fruit sways idly and regrows with an elastic pop; juicers wobble and bubble; the bin lid springs open; UI coins swoop to the money counter; buttons squish; boost buttons wiggle; a "NEW!" banner drops in after each unlock.
 - **Ambient life** (`Decor/`): `Ambient` drives the wind sway on trees, flowers, grass, reeds and bunting, the windmill sails, drifting cloud shadows, the scrolling foam and the falling waterfall in a single Update. `Wanderer` drives the chickens, dog, cat and ducks, which scatter when you run at them. `Butterflies` flutters over the flower beds.
-- **ASMR audio** (`Core/Sfx.cs`): all sounds are synthesised at 44.1 kHz with soft attacks and rounded tails: squelchy fruit bursts, crunchy chops, wooden "tok"s into the hopper, glass "tink"s on the counter, metallic coin clinks that rise in pitch during a collection streak, a marimba unlock chime, bubbling pours, bin thunks, footstep taps, and a looping breeze-and-birdsong ambience.
+- **Recorded effects** for the moments players hear most: real coin clinks (4 random variants) when collecting cash, a cash shuffle when a customer pays, a sparkly award arpeggio on unlocks, a chord swell for rewards, bells for Golden Apples, an ice clink when a cup lands, wooden thunks for crates, a velcro rip for taped boxes, gravel footsteps, a round pop for pickups, crisp UI taps, a woosh for panels and a three-note "nope" for errors. Pick and audition them in **Juice King ▸ Audio ▸ Sound Board**.
+- **ASMR audio** (`Core/Sfx.cs`): everything else is synthesised at 44.1 kHz with soft attacks and rounded tails: squelchy fruit bursts, crunchy chops, wooden "tok"s into the hopper, glass "tink"s on the counter, metallic coin clinks that rise in pitch during a collection streak, a marimba unlock chime, bubbling pours, bin thunks, footstep taps, and a looping breeze-and-birdsong ambience.
 
 ## Look
 
@@ -289,7 +290,7 @@ Hand edits to the generated scenes are overwritten on rebuild. Put layout change
 | Path | What it holds |
 |---|---|
 | `Scripts/Runtime/Core/Items.cs` | Item types and **all balance numbers** (`Balance`): HP, slices, prices, juice time, upgrade costs |
-| `Scripts/Runtime/Core` | GameManager (money, save, unlocks, offline earnings), Boosts (timed ad boosts), Ads (rewarded-ad entry point), Iap + IapCatalog (store products and purchase flow), Tweener, Pool, Sfx (procedural audio), Fx (particles), CameraFollow, NavBaker |
+| `Scripts/Runtime/Core` | GameManager (money, save, unlocks, offline earnings), Boosts (timed ad boosts), Ads (rewarded-ad entry point), Iap + IapCatalog (store products and purchase flow), Tweener, Pool, Sfx (synthesised + recorded sound effects), Fx (particles), CameraFollow, NavBaker |
 | `Scripts/Runtime/Items` | Carrier (swaying back/hand stack), ItemPile (grid piles), LooseItems (ground pickups), StackItem |
 | `Scripts/Runtime/Stations` | FruitNode/FruitField, Juicer, Counter, CashPile, TrashBin |
 | `Scripts/Runtime/Zones` | Floor pads: Drop, Pickup, Cash, Upgrade, Unlock, Trash, plus UnlockManager |
@@ -308,4 +309,5 @@ Hand edits to the generated scenes are overwritten on rebuild. Put layout change
 - UI: the project's own atlases in `Assets/Game/UI`, and hero coin/money-bag art from the *2D Mobile Game UI Kit* by 300Mind (Unity Asset Store, Standard EULA). Only its two sprite sheets are in `Assets/ThirdParty/300Mind`.
 - Animals: chicken, dog and cat from [Animals FREE by ithappy](https://assetstore.unity.com/) (Unity Asset Store, Standard EULA), in `Assets/ThirdParty/ithappy`. Only the needed meshes, animations, controllers and texture were extracted. The package's own `Packages/manifest.json` was deliberately not imported.
 - Font: Lilita One by Juan Montoreano (SIL Open Font License 1.1).
-- The icons, UI sprites, textures, particle effects and sound effects are generated procedurally by the project's own code.
+- Sound effects: recorded clips from *Feel / Nice Vibrations* by More Mountains (coins, cash, award, buttons, pop, wood impacts, ice, velcro, footsteps, carillon, woosh, strike success), *FREE Casual Game SFX Pack* by Dustyroom and *UI SFX Free Pack* by Skril Studio (Unity Asset Store, Standard EULA; packs in `Assets/ThirdParty/Audio`). The rest (chainsaw, juicer, engine, fruit bursts, fox, ambience...) is synthesised by `Core/Sfx.cs`.
+- The icons, UI sprites, textures and particle effects are generated procedurally by the project's own code.

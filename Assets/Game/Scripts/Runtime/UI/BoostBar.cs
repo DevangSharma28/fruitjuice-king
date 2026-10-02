@@ -25,6 +25,9 @@ namespace JuiceKing
     /// <summary>
     /// Rewarded-ad boosts on the side of the screen: 2x cash, turbo and a free cash bag.
     /// Also owns the "get it free" chip shown while the player stands on an unlock pad they cannot afford.
+    /// <para>Ad states: a loaded video (full colour, video badge); VIP or an Ad Ticket (full colour, no video badge,
+    /// "CLAIM" / "USE TICKET"); no video yet (dimmed, a tap explains why: offline / no fill); no ad network at all in a
+    /// release build (the column is hidden).</para>
     /// </summary>
     public class BoostBar : MonoBehaviour
     {
@@ -66,7 +69,10 @@ namespace JuiceKing
         {
             var gm = GameManager.I;
             bool want = gm.TutorialStep >= showFromStep;
-            if (want && !_shown)
+            // A release build whose ad SDK could not start offers no rewards at all: hide the column, not dead buttons.
+            bool enabled = Ads.Enabled;
+            if (_shown && root.gameObject.activeSelf != enabled) root.gameObject.SetActive(enabled);
+            if (want && !_shown && enabled)
             {
                 _shown = true;
                 root.gameObject.SetActive(true);
@@ -77,14 +83,14 @@ namespace JuiceKing
                     d += 0.1f;
                 }
             }
-            if (_shown) foreach (var b in buttons) Refresh(b);
+            if (_shown && enabled) foreach (var b in buttons) Refresh(b);
             UpdateAssist();
         }
 
         void Refresh(BoostButton b)
         {
             float dt = Time.deltaTime;
-            bool available;
+            bool available, tappable;
             switch (b.kind)
             {
                 case BoostButtonKind.Cash2x:
@@ -105,13 +111,15 @@ namespace JuiceKing
                         b.label.text = active ? Boosts.FormatTime(rem) : (b.kind == BoostButtonKind.Cash2x ? "2x CASH" : "TURBO");
                     }
                     available = Ads.IsReady;
-                    if (b.adBadge != null) b.adBadge.SetActive(!active);
+                    tappable = true;
+                    if (b.adBadge != null) b.adBadge.SetActive(!active && !Ads.SkipsVideo);
                     break;
                 }
                 default:
                 {
                     float cd = Boosts.FreeCashCooldown;
                     available = cd <= 0f && Ads.IsReady;
+                    tappable = cd <= 0f;
                     int key = cd > 0f ? -Mathf.CeilToInt(cd) - 1 : FreeCashAmount();
                     if (key != b.shown)
                     {
@@ -123,12 +131,13 @@ namespace JuiceKing
                         b.ring.enabled = cd > 0f;
                         b.ring.fillAmount = 1f - Mathf.Clamp01(cd / Balance.FreeCashCooldown);
                     }
-                    if (b.adBadge != null) b.adBadge.SetActive(cd <= 0f);
+                    if (b.adBadge != null) b.adBadge.SetActive(cd <= 0f && !Ads.SkipsVideo);
                     break;
                 }
             }
 
-            b.button.interactable = available;
+            // Dimmed while no video is loaded, but still tappable: the tap says why (offline / no video yet).
+            b.button.interactable = tappable;
             if (b.icon != null) b.icon.color = available ? Color.white : new Color(1f, 1f, 1f, 0.5f);
 
             // Periodic attention wiggle while an offer is waiting.
@@ -150,22 +159,30 @@ namespace JuiceKing
         void OnTap(BoostButton b)
         {
             if (OfferPopup.I == null || OfferPopup.I.IsOpen) return;
-            Sfx.Play(SfxId.Click, 0.6f);
             Tweener.Punch(b.rect, 0.2f, 0.2f, Vector3.one);
+            if (!Ads.IsReady)
+            {
+                Sfx.Play(SfxId.Error, 0.35f);
+                if (HUD.I != null) HUD.I.Toast(Ads.NotReadyMessage, null, 2.2f);
+                return;
+            }
+            Sfx.Play(SfxId.Click, 0.6f);
+            string watch = Ads.ClaimLabel();
+            bool video = !Ads.SkipsVideo;
             switch (b.kind)
             {
                 case BoostButtonKind.Cash2x:
                     OfferPopup.I.Show("2x CASH", $"Double all sales for <b>{Boosts.FormatTime(Balance.CashBoostSeconds)}</b> of play!", cashIcon,
-                        "WATCH", true, () => Ads.ShowRewarded(Ads.PlacementCash2x, () => GrantBoost(BoostKind.Cash2x, b)));
+                        watch, video, () => Ads.ShowRewarded(Ads.PlacementCash2x, () => GrantBoost(BoostKind.Cash2x, b)));
                     break;
                 case BoostButtonKind.Turbo:
                     OfferPopup.I.Show("TURBO", $"Run faster, make drinks faster and get more customers for <b>{Boosts.FormatTime(Balance.TurboSeconds)}</b> of play!", turboIcon,
-                        "WATCH", true, () => Ads.ShowRewarded(Ads.PlacementTurbo, () => GrantBoost(BoostKind.Turbo, b)));
+                        watch, video, () => Ads.ShowRewarded(Ads.PlacementTurbo, () => GrantBoost(BoostKind.Turbo, b)));
                     break;
                 default:
                     int amount = FreeCashAmount();
                     OfferPopup.I.Show("FREE CASH", $"Grab a bag of <b>${UnlockZone.Format(amount)}</b>!", freeCashIcon,
-                        "WATCH", true, () => Ads.ShowRewarded(Ads.PlacementFreeCash, () =>
+                        watch, video, () => Ads.ShowRewarded(Ads.PlacementFreeCash, () =>
                         {
                             Boosts.StartFreeCashCooldown();
                             GiveCash(amount, RectTransformUtility.WorldToScreenPoint(null, b.rect.position));
@@ -272,7 +289,7 @@ namespace JuiceKing
             {
                 bool adReady = Ads.IsReady;
                 OfferPopup.I.Show("WELCOME BACK!", $"Your helpers made\n<size=140%><color=#2E9E3E>${UnlockZone.Format(amount)}</color></size>\nwhile you were away.",
-                    freeCashIcon, adReady ? "COLLECT x2" : "COLLECT", adReady,
+                    freeCashIcon, adReady ? "COLLECT x2" : "COLLECT", adReady && !Ads.SkipsVideo,
                     adReady
                         ? () => Ads.ShowRewarded(Ads.PlacementOffline, () => ClaimOffline(amount * 2, true), () => ClaimOffline(amount, false))
                         : (Action)(() => ClaimOffline(amount, false)),

@@ -25,12 +25,17 @@ namespace JuiceKing
 
         Action _onPrimary, _onSecondary;
         bool _open;
+        // Primary label insets: the left one leaves room for the video badge; without a badge the label is centred.
+        float _textLeft, _textRight;
 
         public bool IsOpen => _open;
 
         void Awake()
         {
             I = this;
+            var tr = primaryText.rectTransform;
+            _textLeft = tr.offsetMin.x;
+            _textRight = -tr.offsetMax.x;
             primary.onClick.AddListener(() => Close(_onPrimary));
             secondary.onClick.AddListener(() => Close(_onSecondary));
             if (closeButton != null) closeButton.onClick.AddListener(() => Close(_onSecondary));
@@ -51,6 +56,8 @@ namespace JuiceKing
             }
             primaryText.text = primaryLabel;
             if (primaryAdBadge != null) primaryAdBadge.SetActive(primaryIsAd);
+            var ptr = primaryText.rectTransform;
+            ptr.offsetMin = new Vector2(primaryIsAd ? _textLeft : _textRight, ptr.offsetMin.y);
             secondaryText.text = secondaryLabel;
             secondary.gameObject.SetActive(!string.IsNullOrEmpty(secondaryLabel));
 
